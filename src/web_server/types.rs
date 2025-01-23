@@ -9,6 +9,7 @@ pub struct RequestPath {
 }
 
 /// A data structure that represents a request.
+#[allow(dead_code)]
 pub struct Request {
   pub method: String,
   pub path: String,
@@ -51,6 +52,22 @@ pub struct Response {
   pub status: u16,
   pub body: String,
   pub headers: HashMap<String, String>,
+}
+
+impl Response {
+  pub fn html(body: String) -> Response {
+    let mut headers = HashMap::new();
+    headers.insert(
+      String::from("Content-Type"),
+      String::from("text/html"),
+    );
+    
+    Response {
+      status: 200,
+      body,
+      headers,
+    }
+  }
 }
 
 /// A data structure that similar to a [HashMap].
