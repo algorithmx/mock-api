@@ -59,6 +59,10 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::fs;
+    use temp_env;
+    use tempfile::TempDir;
+    
 
     use super::*;
 
@@ -91,20 +95,22 @@ mod tests {
 
     #[test]
     fn test_create_and_get_project() {
-        let server = setup_test_server();
+        let test_dir = TempDir::new().unwrap();
+        fs::create_dir_all(test_dir.path().join("projects")).unwrap();
         
-        // Create test project
-        let test_config = r#"{"endpoints":[{"path":"/test","when":[{"method":"GET","response":{"status":200,"body":"test"}}]}]}"#;
-        let response = server.test_request(Method::Post, "/projects/test-project", None, Some(test_config.to_string()));
-        assert_eq!(response.status, 200);
+        temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
+            let server = setup_test_server();
+            
+            // Create test project
+            let test_config = r#"{"description": "test", "endpoints": {}}"#;
+            let response = server.test_request(Method::Post, "/projects/test-project", None, Some(test_config.to_string()));
+            assert_eq!(response.status, 200);
 
-        // Get created project
-        let response = server.test_request(Method::Get, "/projects/test-project", None, None);
-        assert_eq!(response.status, 200);
-        assert!(response.body.contains("endpoints"));
-
-        // Cleanup
-        // pass
+            // Get created project
+            let response = server.test_request(Method::Get, "/projects/test-project", None, None);
+            assert_eq!(response.status, 200);
+            assert!(response.body.contains("endpoints"));
+        });
     }
 
     #[test]
