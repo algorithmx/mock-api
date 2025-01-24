@@ -1,6 +1,6 @@
 mod web_server;
 
-use std::{collections::HashMap, fs::read_to_string, env};
+use std::{collections::HashMap, fs::read_to_string};
 
 use web_server::{
   types::{Method, Nested, RequestOption, Response},
@@ -10,14 +10,12 @@ use web_server::{
 mod handlers;
 mod helpers;
 
-
 fn main() {
-  let port = env::var("PORT").unwrap_or("53500".to_string());
-  let server_addr = "127.0.0.1:".to_string() + &port;
-  let max_connections = env::var("MAX_CONNECTIONS").unwrap_or("1000".to_string());
+  let server_addr = format!("127.0.0.1:{}", helpers::get_env_var("PORT", "53500".to_string()));
+  let max_connections: usize = helpers::get_env_var("MAX_CONNECTIONS", 1000);
 
   let mut server = Server::new(ServerConf {
-    max_connections: max_connections.parse::<usize>().unwrap(),
+    max_connections: max_connections,
   });
 
   server.get("/", |_| {
@@ -108,55 +106,8 @@ fn main() {
 
   // Add API documentation endpoint
   server.get("/api-doc", |_| {
-    let html = r#"
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Mock API Documentation</title>
-        <style>
-          body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-          .endpoint { margin: 20px 0; padding: 10px; border: 1px solid #ddd; }
-          code { background: #f5f5f5; padding: 2px 4px; }
-        </style>
-      </head>
-      <body>
-        <h1>Mock API Documentation</h1>
-        
-        <div class="endpoint">
-          <h3>GET /</h3>
-          <p>Returns a simple hello world message</p>
-          <p>Response: <code>{"name": "Hello world!"}</code></p>
-        </div>
-
-        <div class="endpoint">
-          <h3>GET /projects/:name</h3>
-          <p>Get a project's configuration</p>
-          <p>Returns the project configuration file if it exists, otherwise returns 404</p>
-        </div>
-
-        <div class="endpoint">
-          <h3>POST /projects/:name</h3>
-          <p>Create a new project configuration</p>
-          <p>Creates a new project if it doesn't exist, returns 400 if project already exists</p>
-        </div>
-
-        <div class="endpoint">
-          <h3>PUT /projects/:name</h3>
-          <p>Update an existing project configuration</p>
-          <p>Updates project if it exists, returns 400 if project doesn't exist</p>
-        </div>
-
-        <div class="endpoint">
-          <h3>GET /projects/:project_name/:path</h3>
-          <p>Mock an API endpoint based on project configuration</p>
-          <p>Returns mock response based on matching configuration in project file</p>
-          <p>Example: <code>GET /projects/my-project/api/users</code></p>
-        </div>
-      </body>
-      </html>
-    "#.to_string();
-
-    Response::html(html)
+    let html = include_str!("api-doc.html");
+    Response::html(html.to_string())
   });
 
   server.listen(server_addr);
