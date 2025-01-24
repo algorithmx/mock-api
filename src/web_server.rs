@@ -54,8 +54,8 @@ impl Server {
       // The browser signals the end of an HTTP request by sending two newline
       // characters in a row.
       // The reason we might receive errors from the incoming method when a client
-      // connects to the server is that we’re not actually iterating over
-      // connections. Instead, we’re iterating over connection attempts. The
+      // connects to the server is that we're not actually iterating over
+      // connections. Instead, we're iterating over connection attempts. The
       // connection might not be successful for a number of reasons, many of them
       // operating system specific. For example, many operating systems have a
       // limit to the number of simultaneous open connections they can support;
@@ -123,6 +123,45 @@ impl Server {
       },
     );
   }
+
+  #[cfg(test)]
+  pub fn handle_request(&self, request: &Request) -> Response {
+    let connection_handler = self.connection_handler.lock().unwrap();
+    
+    for listener in &connection_handler.listeners {
+        if let Some(parsed_path) = helpers::parse_request_path(&listener.path, &request.path) {
+            if listener.method.to_string() == request.method {
+                let mut request = request.clone();
+                request.path = parsed_path.path;
+                request.queries = parsed_path.queries;
+                request.params = parsed_path.params;
+                request.matches = parsed_path.matches;
+                
+                return (listener.handler)(request);
+            }
+        }
+    }
+    
+    // Return 404 if no matching route is found
+    let mut body = Nested::new();
+    body.insert_string("error".to_string(), "Not Found".to_string());
+    Response::json(404, body, None)
+  }
+
+  #[cfg(test)]
+  pub fn test_request(&self, method: Method, path: &str, body: Option<String>) -> Response {
+    let request = Request {
+      method: method.to_string(),
+      path: path.to_string(),
+      headers: HashMap::new(),
+      body: body.unwrap_or("".to_string()),
+      version: "1.1".to_string(),
+      queries: HashMap::new(),
+      params: HashMap::new(),
+      matches: Vec::new(),
+    };
+    self.handle_request(&request)
+  }
 }
 
 impl Response {
@@ -181,6 +220,7 @@ impl ConnectionHandler {
         let handler = &listener.handler;
 
         let parsed_path = parsed_path.unwrap();
+        println!("**** parsed_path {:?}", parsed_path);
         request.path = parsed_path.path;
         request.queries = parsed_path.queries;
         request.params = parsed_path.params;

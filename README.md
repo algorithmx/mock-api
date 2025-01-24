@@ -13,20 +13,18 @@ operators: `is`, `is!`, `contains`, `contains!`
 ```json
 {
   "description": "my-project",
-  "endpoints": [
-    {
-      "path": "hello",
+  "endpoints": {
+    "hello": {
       "when": [
         {
           "method": "GET",
           "request": {
-            "queries": [
-              {
+            "queries": {
+              "name": {
                 "operator": "is!",
-                "name": "name",
                 "value": "foo"
               }
-            ],
+            },
             "headers": {
               "token": "go"
             }
@@ -41,11 +39,11 @@ operators: `is`, `is!`, `contains`, `contains!`
         {
           "method": "POST",
           "request": {
-            "body": {
-              "name": "foo"
-            },
             "headers": {
               "content-type": "xxx"
+            },
+            "body": {
+              "name": "foo"
             }
           },
           "response": {
@@ -56,6 +54,6 @@ operators: `is`, `is!`, `contains`, `contains!`
         }
       ]
     }
-  ]
+  }
 }
 ```

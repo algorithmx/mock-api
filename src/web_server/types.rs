@@ -10,6 +10,7 @@ pub struct RequestPath {
 
 /// A data structure that represents a request.
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct Request {
   pub method: String,
   pub path: String,
@@ -37,6 +38,7 @@ impl Method {
   }
 }
 
+#[derive(Debug)]
 pub enum RequestPathPattern {
   Exact(String),
   Match(String),
@@ -48,6 +50,7 @@ pub struct RequestOption {
 }
 
 /// A data structure that represents a response.
+#[derive(Clone,Debug)]
 pub struct Response {
   pub status: u16,
   pub body: String,

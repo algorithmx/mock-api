@@ -39,7 +39,56 @@
     <h3>GET /projects/:project_name/:path</h3>
     <p>Mock an API endpoint based on project configuration</p>
     <p>Returns mock response based on matching configuration in project file</p>
-    <p>Example: <code>GET /projects/my-project/api/users</code></p>
+    
+    <h4>Request Pattern</h4>
+    <ul>
+      <li>URL Pattern: <code>^/projects/([^/]+)/([^?]+)</code></li>
+      <li>Method: GET</li>
+    </ul>
+
+    <h4>Mock Configuration Format</h4>
+    <p>The mock configurations should be stored in JSON files with the following structure:</p>
+    <pre><code>{
+  "description": "Project description",
+  "endpoints": {
+    "/api/users": {
+      "when": [{
+        "method": "GET",
+        "request": {
+          "queries": {
+            "filter": {
+              "operator": "is",
+              "value": "active"
+            }
+          },
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {"optional": "json body"}
+        },
+        "delay": 1000,
+        "response": {
+          "status": 200,
+          "body": {"example": "response content"},
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        }
+      }]
+    }
+  }
+}</code></pre>
+
+    <h4>Example Usage</h4>
+    <p><code>GET /projects/my-project/api/users</code></p>
+    <p>This will look for a mock configuration in my-project's config file matching the path "/api/users" with GET method.</p>
+
+    <h4>Response</h4>
+    <ul>
+      <li>Returns the configured mock response if found</li>
+      <li>Returns 400 if project doesn't exist</li>
+      <li>Returns 400 "Not implemented" if no matching endpoint configuration</li>
+    </ul>
   </div>
 </body>
 </html>
