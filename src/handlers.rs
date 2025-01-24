@@ -3,6 +3,28 @@ use serde_json::Value;
 use std::{collections::HashMap, fs, fs::read_to_string};
 use web_server::types::{Nested, Request, Response};
 
+
+pub fn get_config() -> impl Fn(Request) -> Response {
+    |request: Request| {
+        let file = helpers::config_file_path_from_request(&request);
+
+    if file.exists() {
+        let content = read_to_string(file).unwrap();
+        let mut headers = HashMap::new();
+        headers.insert(
+            String::from("Content-Type"),
+            String::from("application/json"),
+        );
+        Response::ok(content, Some(headers))
+    } else {
+        let mut body = Nested::new();
+        body.insert_string("error".to_string(), "Project does not exist.".to_string());
+            Response::json(404, body, None)
+        }
+    }
+}
+
+
 /// Returns a closure that saves a project's config.
 pub fn save_config() -> impl Fn(Request) -> Response {
   |request: Request| {
@@ -29,6 +51,7 @@ pub fn save_config() -> impl Fn(Request) -> Response {
     Response::json(200, body, None)
   }
 }
+
 
 /// Returns a closure that mocks a request of a given project.
 ///
@@ -175,7 +198,6 @@ pub fn mock_request_old() -> impl Fn(Request) -> Response {
 
 pub fn mock_request() -> impl Fn(Request) -> Response {
     |request: Request| {
-        println!("%%%% mock_request get request: {:?}", request);
         // Get project config file path
         let config_path = helpers::get_project_config_file_path(request.matches.get(0).unwrap());
         
@@ -222,8 +244,8 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
                         // Convert response body to string, handling null properly
                         let body = condition.response.body
                             .as_ref()
-                            .map(|b| b.to_string())
-                            .unwrap_or_else(|| "null".to_string());
+                            .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
+                            .unwrap_or("null".to_string());
 
                         return Response {
                             status: condition.response.status,
@@ -247,19 +269,16 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
 fn check_condition(request: &Request, condition: &schema::WhenCondition, strict: bool) -> bool {
     // Only check queries if they're specified
     if !condition.request.queries.is_empty() && !check_queries(request, condition) {
-        println!(">>>> check_queries: false");
         return false;
     }
     
     // Only check headers if they're specified
     if !condition.request.headers.is_empty() && !check_headers(request, condition) {
-        println!(">>>> check_headers: false");
         return false;
     }
     
     // Only check body if it's specified
     if condition.request.body.is_some() && !check_body(request, condition, strict) {
-        println!(">>>> check_body: false");
         return false;
     }
     
@@ -267,15 +286,9 @@ fn check_condition(request: &Request, condition: &schema::WhenCondition, strict:
 }
 
 fn check_queries(request: &Request, condition: &schema::WhenCondition) -> bool {
-    println!("++++ request: {:?}", request);
-    println!("++++ condition: {:?}", condition);
     for (expected_query_name, expected_query_param) in &condition.request.queries {
-        println!("++++ request.queries: {:?}", request.queries);
-        println!("++++ expected_query_name: {:?}", expected_query_name);
-        println!("++++ expected_query_param: {:?}", expected_query_param);
         let actual_query_value = request.queries.get(expected_query_name);
         if actual_query_value.is_none() {
-            println!("---- Expected query param is missing");
             return false; // Expected query param is missing
         }
         let actual_query_value = actual_query_value.unwrap();
@@ -283,25 +296,21 @@ fn check_queries(request: &Request, condition: &schema::WhenCondition) -> bool {
         match expected_query_param.operator.as_str() {
             "is" => {
                 if actual_query_value != &expected_query_param.value {
-                    println!("---- Expected query param is NOT equal to actual query param");
                     return false;
                 }
             }
             "is!" => {
                 if actual_query_value == &expected_query_param.value {
-                    println!("---- Expected query param IS equal to actual query param");
                     return false;
                 }
             }
             "contains" => {
                 if !actual_query_value.contains(&expected_query_param.value) {
-                    println!("---- Expected query param is NOT contained in actual query param");
                     return false;
                 }
             }
             "contains!" => {
                 if actual_query_value.contains(&expected_query_param.value) {
-                    println!("---- Expected query param IS contained in actual query param");
                     return false;
                 }
             }

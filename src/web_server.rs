@@ -136,7 +136,6 @@ impl Server {
                 request.queries = parsed_path.queries;
                 request.params = parsed_path.params;
                 request.matches = parsed_path.matches;
-                
                 return (listener.handler)(request);
             }
         }
@@ -149,11 +148,11 @@ impl Server {
   }
 
   #[cfg(test)]
-  pub fn test_request(&self, method: Method, path: &str, body: Option<String>) -> Response {
+  pub fn test_request(&self, method: Method, path: &str, headers: Option<HashMap<String, String>>, body: Option<String>) -> Response {
     let request = Request {
       method: method.to_string(),
       path: path.to_string(),
-      headers: HashMap::new(),
+      headers: headers.unwrap_or(HashMap::new()),
       body: body.unwrap_or("".to_string()),
       version: "1.1".to_string(),
       queries: HashMap::new(),
@@ -206,46 +205,46 @@ impl ConnectionHandler {
     }
   }
 
-  pub fn handle_connection(&self, mut stream: TcpStream) {
-    let mut request = helpers::parse_tcp_stream(&mut stream).unwrap();
-
-    let mut response_status = 404;
-    let mut response_body = String::new();
-    let mut response_headers = String::new();
-
+  fn dispatch_request(&self, request: Request) -> (u16, String, String) {
     for listener in self.listeners.iter() {
-      let parsed_path = helpers::parse_request_path(&listener.path, &request.path[..]);
+      if let Some(parsed_path) = 
+        helpers::parse_request_path(
+          &listener.path,
+          &request.path
+        ) {
+        if listener.method.to_string() == request.method {
+          let mut request = request;
+          request.path = parsed_path.path;
+          request.queries = parsed_path.queries;
+          request.params = parsed_path.params;
+          request.matches = parsed_path.matches;
 
-      if parsed_path.is_some() && listener.method.to_string() == request.method {
-        let handler = &listener.handler;
+          let response = (listener.handler)(request);
+          let mut response_headers = String::new();
 
-        let parsed_path = parsed_path.unwrap();
-        println!("**** parsed_path {:?}", parsed_path);
-        request.path = parsed_path.path;
-        request.queries = parsed_path.queries;
-        request.params = parsed_path.params;
-        request.matches = parsed_path.matches;
-
-        let response = handler(request);
-        response_status = response.status;
-        response_body = response.body;
-
-        if response.headers.len() > 0 {
-          for (key, value) in response.headers.iter() {
-            response_headers.push_str(&format!("{}: {}\r\n", key, value));
+          if !response.headers.is_empty() {
+            for (key, value) in response.headers.iter() {
+              response_headers.push_str(&format!("{}: {}\r\n", key, value));
+            }
           }
+
+          return (response.status, response.body, response_headers);
         }
-        break;
       }
     }
+    
+    (404, String::new(), String::new())
+  }
 
+  pub fn handle_connection(&self, mut stream: TcpStream) {
+    let request = helpers::parse_tcp_stream(&mut stream).unwrap();
+    let (response_status, response_body, response_headers) = 
+      self.dispatch_request(request);
     let length = response_body.len();
     let response = format!(
       "HTTP/1.1 {response_status}\r\n{response_headers}Content-Length: {length}\r\n\r\n{response_body}"
     );
 
-    // The write_all method on stream takes a &[u8] and sends those bytes directly
-    // down the connection.
     stream.write_all(response.as_bytes()).unwrap();
     stream.flush().unwrap();
   }
