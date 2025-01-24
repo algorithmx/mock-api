@@ -119,7 +119,7 @@ mod tests {
         
         // Create test project with comprehensive mock configuration
         let test_config = r#"{
-            "description": "test-mock",
+            "description": "test-mock1",
             "endpoints": {
                 "api/test": {
                     "when": [{
@@ -137,14 +137,14 @@ mod tests {
                     }]
                 }
             }}"#;
-        let _ = server.test_request(Method::Post, "/projects/test-mock", None, Some(test_config.to_string()));
+        let _ = server.test_request(Method::Post, "/projects/test-mock1", None, Some(test_config.to_string()));
 
         // Test mock endpoint with matching request
         let mut headers = HashMap::new();
         headers.insert("x-test".to_string(), "value".to_string());
         let response = server.test_request(
             Method::Get, 
-            "/projects/test-mock/api/test?filter=active", 
+            "/projects/test-mock1/api/test?filter=active", 
             Some(headers),
             None
         );
