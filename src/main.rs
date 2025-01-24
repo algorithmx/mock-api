@@ -1,6 +1,7 @@
 mod web_server;
 
-use std::{collections::HashMap, fs::read_to_string};
+use std::{collections::HashMap, fs::read_to_string, env};
+
 use web_server::{
   types::{Method, Nested, RequestOption, Response},
   Server, ServerConf,
@@ -9,12 +10,14 @@ use web_server::{
 mod handlers;
 mod helpers;
 
-const SERVER_ADDR: &str = "127.0.0.1:53500";
-const MAX_CONNECTIONS: usize = 1000;
 
 fn main() {
+  let port = env::var("PORT").unwrap_or("53500".to_string());
+  let server_addr = "127.0.0.1:".to_string() + &port;
+  let max_connections = env::var("MAX_CONNECTIONS").unwrap_or("1000".to_string());
+
   let mut server = Server::new(ServerConf {
-    max_connections: MAX_CONNECTIONS,
+    max_connections: max_connections.parse::<usize>().unwrap(),
   });
 
   server.get("/", |_| {
@@ -156,5 +159,5 @@ fn main() {
     Response::html(html)
   });
 
-  server.listen(String::from(SERVER_ADDR));
+  server.listen(server_addr);
 }
