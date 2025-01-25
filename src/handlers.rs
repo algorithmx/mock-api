@@ -74,7 +74,7 @@ pub fn build_config_with_llm() -> impl Fn(Request) -> Response {
         };
         let config_file_path = get_project_config_file_path(project_name);
 
-        let config = match compose_config(&request.body) {
+        let config = match compose_config(&request.body, &project_name) {
             Ok(cfg) => cfg,
             Err(e) => {
                 eprintln!("Failed to compose config: {}", e);

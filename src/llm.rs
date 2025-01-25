@@ -12,20 +12,21 @@ struct LLMRequestBody {
 }
 
 pub fn compose_config(
-    request_body: &str
+    request_body: &str,
+    project_name: &str
 ) -> Result<String, reqwest::Error> {
     let body: LLMRequestBody = serde_json::from_str(request_body).unwrap();
+    let user_prompt = format!("Now write configuration json for the following API mock project called \"{}\"\
+        (which should be the value of the \"description\" field in the final json reply).\n\n## API requirement specification:\n{}", 
+        project_name, body.prompt);
     let system_prompt = "You are a outstanding API designer and backend engineer. \
     Your task is to help the user to write a json configuration file for the API mock server. \
     The configuration file should be in the format of the `ProjectConfig` struct in the `schema.rs` file. \
     You should consider the provided example. \
     Your reply must contains only the configuration as valid json, no extra words or comments.
-    Special attention to match the top-level keys to the provided example.
-    ";
-    
+    Special attention to match the top-level keys to the provided example.";
     let schema_content = include_str!("./schema.rs");
     let example_content = include_str!("./llm/example_prompt.txt");
-    
     let assistant_prompt = format!(
         "## `schema.rs` file content\n\n{}\n\n{}",
         schema_content,
@@ -40,7 +41,7 @@ pub fn compose_config(
             &body.api_key, 
             system_prompt, 
             &assistant_prompt, 
-            &body.prompt
+            &user_prompt
         )
     );
     remove_quotes_if_exists(result)
