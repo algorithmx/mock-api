@@ -27,11 +27,17 @@ pub fn stringify_nested(nested: &Nested) -> String {
 /// Converts a [NestedValue] to a JSON string.
 fn stringfy_nested_value(nested: &NestedValue) -> String {
   match nested {
-    // NestedValue::Map(nested) => stringify_nested(nested),
+    NestedValue::Map(nested) => stringify_nested(nested),
     NestedValue::Str(value) => format!("\"{}\"", value),
-    // NestedValue::Bool(value) => format!("{}", value),
-    // NestedValue::Int(value) => format!("{}", value),
-    // NestedValue::Float(value) => format!("{}", value),
+    NestedValue::Bool(value) => format!("{}", value),
+    NestedValue::Int(value) => format!("{}", value),
+    NestedValue::Float(value) => format!("{}", value),
+    NestedValue::Array(value) => {
+        let elements: Vec<String> = value.iter()
+            .map(|v| stringfy_nested_value(v))
+            .collect();
+        format!("[{}]", elements.join(", "))
+    },
   }
 }
 

@@ -50,7 +50,7 @@ pub struct RequestOption {
 }
 
 /// A data structure that represents a response.
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Response {
   pub status: u16,
   pub body: String,
@@ -73,25 +73,29 @@ impl Response {
   }
 }
 
-/// A data structure that similar to a [HashMap].
+/// A data structure that is similar to a [HashMap].
+#[derive(serde::Deserialize, Debug)]
 pub struct Nested {
-  values: Vec<(String, NestedValue)>,
+  #[serde(flatten)]
+  pub values: HashMap<String, NestedValue>,
 }
 
 impl Nested {
   pub fn new() -> Self {
-    Self { values: Vec::new() }
+    Self {
+      values: HashMap::new(),
+    }
   }
 
-  fn insert(&mut self, key: String, value: NestedValue) {
-    self.values.push((key, value));
+  pub fn insert(&mut self, key: String, value: NestedValue) {
+    self.values.insert(key, value);
   }
 
   pub fn insert_string(&mut self, key: String, value: String) {
     self.insert(key, NestedValue::Str(value));
   }
 
-  pub fn iter(&self) -> std::slice::Iter<(String, NestedValue)> {
+  pub fn iter(&self) -> std::collections::hash_map::Iter<String, NestedValue> {
     self.values.iter()
   }
 
@@ -101,10 +105,13 @@ impl Nested {
 }
 
 /// A value that can be stored in a [Nested].
+#[derive(serde::Deserialize, Debug)]
+#[serde(untagged)]
 pub enum NestedValue {
-  // Map(Nested),
+  Map(Nested),
   Str(String),
-  // Bool(bool),
-  // Int(i32),
-  // Float(f32),
+  Bool(bool),
+  Int(i32),
+  Float(f32),
+  Array(Vec<NestedValue>),
 }
