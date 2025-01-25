@@ -23,7 +23,7 @@ Now I am almost there with an experimental endpoint `/llm/:name`, which accepts 
 	"api_url":"https://api.deepseek.com/chat/completions",
 	"api_model":"deepseek-chat",
   "api_key":"YOUR_API_KEY_HERE",
-  "prompt":"Now write configuration json for the following API mock project called  ... (prompt continues)"
+  "prompt":"(Your API requirement specifications prompt...)"
 }
 ```
 
