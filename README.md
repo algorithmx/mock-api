@@ -3,6 +3,10 @@ Note
 
 ## [Yunlong]
 
+Hi! This is my first serious Rust project. It mocks the API behavior defined in a configuration file. 
+
+Look at [`prompts/p1.txt`](prompts/p1.txt) for details.
+
 ### Launch
 
 To test:
