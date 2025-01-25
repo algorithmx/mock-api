@@ -1,0 +1,155 @@
+## Send
+
+
+The json below describes a mock-api configuration for the project "test-mock1" 
+that mimics an API endpoint `/api/test`. 
+When sending `http://localhost:3000/projects/test-mock1/api/test?filter=active`, 
+with header `{"x-test": "value"}`, the API mock immediately returns
+status 200 with body contains plain text "mocked response".
+
+
+```json
+{
+    "description": "test-mock1",
+    "endpoints": {
+        "/api/test": {
+            "when": [{
+                "method": "GET",
+                "request": {
+                    "queries": {"filter": {"operator": "is", "value": "active"}},
+                    "headers": {"x-test": "value"}
+                },
+                "response": {
+                    "status": 200,
+                    "body": "mocked response",
+                    "headers": {"content-type": "text/plain"}
+                },
+                "delay": 0
+            }]
+        }
+    }
+}
+```
+
+Now write configuration json for the following API mock project called "sales":
+
+### endpoint 1 -- `/statistics`
+when GET is sent to this endpoint, return the message of mock statistics of json format,
+`{"Q1 total": 100, "Q2 total": 200}`
+
+when PUT is sent to this endpoint with new statistics in json format as body, the endpoint save the 
+new statistics.
+
+### endpoint 2 -- `/add/sale`
+
+when POST method is sent to this endpoint, the body is added to the sale record by the server.
+
+
+---
+
+## Reply
+
+### From Claude
+
+```json
+{
+    "description": "sales",
+    "endpoints": {
+        "statistics": {
+            "when": [
+                {
+                    "method": "GET",
+                    "response": {
+                        "status": 200,
+                        "body": {"Q1 total": 100, "Q2 total": 200},
+                        "headers": {"content-type": "application/json"}
+                    },
+                    "delay": 0
+                },
+                {
+                    "method": "PUT",
+                    "request": {
+                        "body": {"type": "object"}
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": "Statistics updated successfully",
+                        "headers": {"content-type": "text/plain"}
+                    },
+                    "delay": 0
+                }
+            ]
+        },
+        "add/sale": {
+            "when": [
+                {
+                    "method": "POST",
+                    "request": {
+                        "body": {"type": "object"}
+                    },
+                    "response": {
+                        "status": 201,
+                        "body": "Sale record added successfully",
+                        "headers": {"content-type": "text/plain"}
+                    },
+                    "delay": 0
+                }
+            ]
+        }
+    }
+}
+```
+
+### From DeepSeek-R1
+
+```json
+{
+    "description": "sales",
+    "endpoints": {
+        "statistics": {
+            "when": [
+                {
+                    "method": "GET",
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "Q1 total": 100,
+                            "Q2 total": 200
+                        },
+                        "headers": {
+                            "content-type": "application/json"
+                        }
+                    },
+                    "delay": 0
+                },
+                {
+                    "method": "PUT",
+                    "response": {
+                        "status": 200,
+                        "body": "Statistics updated",
+                        "headers": {
+                            "content-type": "text/plain"
+                        }
+                    },
+                    "delay": 0
+                }
+            ]
+        },
+        "add/sale": {
+            "when": [
+                {
+                    "method": "POST",
+                    "response": {
+                        "status": 200,
+                        "body": "Sale added",
+                        "headers": {
+                            "content-type": "text/plain"
+                        }
+                    },
+                    "delay": 0
+                }
+            ]
+        }
+    }
+}
+```
