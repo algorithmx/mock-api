@@ -17,7 +17,15 @@ What I eventually want is:
 Human language API requirement specification ==> LLM ==> Configuration Json
 ```
 
-Now I am almost there ...
+Now I am almost there with an experimental endpoint `/llm/:name`, which accepts a POST with JSON body:
+```json
+{
+	"api_url":"https://api.deepseek.com/chat/completions",
+	"api_model":"deepseek-chat",
+  "api_key":"YOUR_API_KEY_HERE",
+  "prompt":"Now write configuration json for the following API mock project called  ... (prompt continues)"
+}
+```
 
 ### Launch
 
