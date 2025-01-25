@@ -7,6 +7,18 @@ Hi! This is my first serious Rust project. It mocks the API behavior defined in 
 
 Look at [`prompt/p1.txt`](prompt/p1.txt) for details.
 
+### TODO
+
+I see the full potential in adapting the original `mock-api` project into an AI-enabled API mock tool. 
+
+What I eventually want is:
+
+```plaintext
+Human language API requirement specification ==> LLM ==> Configuration Json
+```
+
+Now I am almost there ...
+
 ### Launch
 
 To test:
