@@ -38,7 +38,7 @@ impl Method {
   }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RequestPathPattern {
   Exact(String),
   Match(String),

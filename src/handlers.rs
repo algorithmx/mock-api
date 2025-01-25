@@ -1,4 +1,4 @@
-use crate::{helpers, web_server, schema};
+use crate::{helpers, schema, web_server};
 use serde_json::Value;
 use std::{collections::HashMap, fs, fs::read_to_string};
 use web_server::types::{Nested, Request, Response};
@@ -6,7 +6,6 @@ use web_server::types::{Nested, Request, Response};
 
 pub fn get_config() -> impl Fn(Request) -> Response {
     |request: Request| {
-        println!("%%%% get_config request: {:?}", request);
         let file = helpers::config_file_path_from_request(&request);
 
         if file.exists() {
@@ -46,12 +45,19 @@ pub fn save_config() -> impl Fn(Request) -> Response {
     // Write empty string if body is empty/missing
     let content = request.body.as_str();
     // if content is an empty string, return
-    println!("%%%% content: {:?}", content);
-    fs::write(file_path, content).unwrap();
-
-    let mut body = Nested::new();
-    body.insert_string("result".to_string(), "ok".to_string());
-    Response::json(200, body, None)
+    match fs::write(file_path, content) {
+        Ok(_) => {
+            let mut body = Nested::new();
+            body.insert_string("result".to_string(), "ok".to_string());
+            Response::json(200, body, None)
+        }
+        Err(e) => {
+            eprintln!("Failed to write config: {}", e);
+            let mut body = Nested::new();
+            body.insert_string("error".to_string(), format!("Failed to save config: {}", e));
+            Response::json(500, body, None)
+        }
+    }
   }
 }
 
@@ -120,88 +126,121 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
 
         // No matching endpoint found
         Response {
-            status: 400,
+            status: 406,
             body: "Not implemented.".to_string(),
             headers: HashMap::new(),
         }
     }
 }
 
+
+/// Check if the request matches the condition.
 fn check_condition(request: &Request, condition: &schema::WhenCondition, strict: bool) -> bool {
-    // Only check queries if they're specified
-    if !condition.request.queries.is_empty() && !check_queries(request, condition) {
-        return false;
+    //! DO NOT MODIFY THIS FUNCTION
+    match &condition.request {
+        Some(cond_req) => {
+            if !check_queries(&request.queries, &cond_req.queries) {
+                return false;
+            }
+            if !check_headers(&request.headers, &cond_req.headers) {
+                return false;
+            }
+            if !check_body(&request.body, &cond_req.body, strict) {
+                return false;
+            }
+            return true;
+        }
+        None => {
+            // check all of the request.queries, request.headers, request.body are empty
+            // removed && request.headers.is_empty()
+            return request.queries.is_empty() && request.body.is_empty();
+        }
     }
-    
-    // Only check headers if they're specified
-    if !condition.request.headers.is_empty() && !check_headers(request, condition) {
-        return false;
-    }
-    
-    // Only check body if it's specified
-    if condition.request.body.is_some() && !check_body(request, condition, strict) {
-        return false;
-    }
-    
-    true
 }
 
-fn check_queries(request: &Request, condition: &schema::WhenCondition) -> bool {
-    for (expected_query_name, expected_query_param) in &condition.request.queries {
-        let actual_query_value = request.queries.get(expected_query_name);
-        if actual_query_value.is_none() {
-            return false; // Expected query param is missing
-        }
-        let actual_query_value = actual_query_value.unwrap();
 
-        match expected_query_param.operator.as_str() {
-            "is" => {
-                if actual_query_value != &expected_query_param.value {
+/// Check if the request queries match the condition's request queries.
+fn check_queries(request_queries: &HashMap<String, String>, queries_from_cond_req: &Option<HashMap<String, schema::QueryParam>>) -> bool {
+    //! DO NOT MODIFY THIS FUNCTION
+    match queries_from_cond_req {
+        Some(cond_req_queries) => {
+            for (expected_query_name, expected_query_param) in cond_req_queries {
+                if request_queries.is_empty() {
                     return false;
                 }
-            }
-            "is!" => {
-                if actual_query_value == &expected_query_param.value {
-                    return false;
+                let actual_query_value = request_queries.get(expected_query_name);
+                if actual_query_value.is_none() {
+                    return false; // Expected query param is missing
+                }
+                let actual_query_value = actual_query_value.unwrap();
+
+                match expected_query_param.operator.as_str() {
+                    "is" => {
+                        if actual_query_value != &expected_query_param.value {
+                            return false;
+                        }
+                    }
+                    "is!" => {
+                        if actual_query_value == &expected_query_param.value {
+                            return false;
+                        }
+                    }
+                    "contains" => {
+                        if !actual_query_value.contains(&expected_query_param.value) {
+                            return false;
+                        }
+                    }
+                    "contains!" => {
+                        if actual_query_value.contains(&expected_query_param.value) {
+                            return false;
+                        }
+                    }
+                    op => {
+                        eprintln!("Warning: Unknown query operator '{}'", op); // Optional: Log unknown operator
+                        return false; // Or decide to ignore and treat as non-matching
+                    }
                 }
             }
-            "contains" => {
-                if !actual_query_value.contains(&expected_query_param.value) {
-                    return false;
-                }
-            }
-            "contains!" => {
-                if actual_query_value.contains(&expected_query_param.value) {
-                    return false;
-                }
-            }
-            op => {
-                eprintln!("Warning: Unknown query operator '{}'", op); // Optional: Log unknown operator
-                return false; // Or decide to ignore and treat as non-matching
-            }
+            return true; // All expected queries matched
+        }
+        None => {
+            return request_queries.is_empty();
         }
     }
-    true // All expected queries matched
 }
 
-fn check_headers(request: &Request, condition: &schema::WhenCondition) -> bool {
-    for (expected_header_name, expected_header_value) in &condition.request.headers {
-        let actual_header_value = request.headers.get(expected_header_name);
-        if actual_header_value.is_none() {
-            return false; // Expected header is missing
+
+/// Check if the request headers match the condition's request headers.
+fn check_headers(request_headers: &HashMap<String, String>, headers_from_cond_req: &Option<HashMap<String, String>>) -> bool {
+    //! DO NOT MODIFY THIS FUNCTION
+    match headers_from_cond_req {
+        Some(cond_req_headers) => {
+            for (expected_header_name, expected_header_value) in cond_req_headers {
+                let actual_header_value = request_headers.get(expected_header_name);
+                if actual_header_value.is_none() {
+                    return false; // Expected header is missing
+                }
+                let actual_header_value = actual_header_value.unwrap();
+                if actual_header_value != expected_header_value {
+                    return false; // Header value does not match
+                }
+            }
+            return true; // All expected headers matched
         }
-        if actual_header_value.unwrap() != expected_header_value {
-            return false; // Header value does not match
+        None => {
+            return request_headers.is_empty();
         }
     }
-    true // All expected headers matched
 }
 
-fn check_body(request: &Request, condition: &schema::WhenCondition, strict: bool) -> bool {
-    match &condition.request.body {
-        None => request.body.is_empty(),
+
+/// Check if the request body matches the condition's request body.
+fn check_body(request_body: &String, body_from_cond_req: &Option<Value>, strict: bool) -> bool {
+    //! DO NOT MODIFY THIS FUNCTION
+    match body_from_cond_req {
+        None => request_body.is_empty(),
         Some(expected_body) => {
-            match serde_json::from_str::<Value>(&request.body) {
+            match serde_json::from_str::<Value>(&request_body) {
                 Ok(actual_body_json) => {
                     if strict {
                         &actual_body_json == expected_body
@@ -222,6 +261,7 @@ fn check_body(request: &Request, condition: &schema::WhenCondition, strict: bool
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -404,7 +444,7 @@ mod tests {
             let handler = mock_request();
             let response = handler(request);
 
-            assert_eq!(response.status, 400);
+            assert_eq!(response.status, 406);
             assert_eq!(response.body, "Not implemented.");
         });
     }
@@ -413,11 +453,11 @@ mod tests {
     fn test_check_condition_all_pass() {
         let condition = schema::WhenCondition {
             method: "GET".to_string(),
-            request: schema::RequestConfig {
-                queries: HashMap::new(),
-                headers: HashMap::new(),
+            request: Some(schema::RequestConfig {
+                queries: None,
+                headers: None,
                 body: None,
-            },
+            }),
             response: schema::ResponseConfig {
                 status: 200,
                 headers: HashMap::new(),
@@ -432,77 +472,50 @@ mod tests {
 
     #[test]
     fn test_check_queries_matching() {
-        let mut queries = HashMap::new();
-        queries.insert("filter".to_string(), schema::QueryParam {
+        let mut request_queries = HashMap::new();
+        request_queries.insert("filter".to_string(), "active".to_string());
+
+        let mut cond_req_queries = HashMap::new();
+        cond_req_queries.insert("filter".to_string(), schema::QueryParam {
             operator: "is".to_string(),
             value: "active".to_string(),
         });
 
-        let condition = schema::WhenCondition {
-            method: "GET".to_string(),
-            request: schema::RequestConfig {
-                queries,
-                headers: HashMap::new(),
-                body: None,
-            },
-            response: schema::ResponseConfig {
-                status: 200,
-                headers: HashMap::new(),
-                body: None,
-            },
-            delay: 0,
+        let condition_request = schema::RequestConfig {
+            queries: Some(cond_req_queries),
+            headers: None,
+            body: None,
         };
 
-        let mut request = create_test_request("GET", "/test?filter=active", None);
-        request.queries.insert("filter".to_string(), "active".to_string());
-        assert!(check_queries(&request, &condition));
+        assert!(check_queries(&request_queries, &condition_request.queries));
     }
 
     #[test]
     fn test_check_headers_matching() {
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        let mut request_headers = HashMap::new();
+        request_headers.insert("content-type".to_string(), "application/json".to_string());
 
-        let condition = schema::WhenCondition {
-            method: "GET".to_string(),
-            request: schema::RequestConfig {
-                queries: HashMap::new(),
-                headers,
-                body: None,
-            },
-            response: schema::ResponseConfig {
-                status: 200,
-                headers: HashMap::new(),
-                body: None,
-            },
-            delay: 0,
+        let mut cond_req_headers = HashMap::new();
+        cond_req_headers.insert("content-type".to_string(), "application/json".to_string());
+
+        let condition_request = schema::RequestConfig {
+            queries: None,
+            headers: Some(cond_req_headers),
+            body: None,
         };
 
-        let mut request = create_test_request("GET", "/test", None);
-        request.headers.insert("content-type".to_string(), "application/json".to_string());
-        assert!(check_headers(&request, &condition));
+        assert!(check_headers(&request_headers, &condition_request.headers));
     }
 
     #[test]
     fn test_check_body_strict_matching() {
-        let body = Some(serde_json::json!({"key": "value"}));
-
-        let condition = schema::WhenCondition {
-            method: "POST".to_string(),
-            request: schema::RequestConfig {
-                queries: HashMap::new(),
-                headers: HashMap::new(),
-                body,
-            },
-            response: schema::ResponseConfig {
-                status: 200,
-                headers: HashMap::new(),
-                body: None,
-            },
-            delay: 0,
+        let request_body = r#"{"key": "value"}"#.to_string();
+        let condition_request = schema::RequestConfig {
+            queries: None,
+            headers: None,
+            body: Some(serde_json::json!({"key": "value"})),
         };
 
-        let request = create_test_request("POST", "/test", Some(r#"{"key": "value"}"#.to_string()));
-        assert!(check_body(&request, &condition, true));
+        assert!(check_body(&request_body, &condition_request.body, true));
     }
 }

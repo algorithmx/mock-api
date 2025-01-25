@@ -26,7 +26,8 @@ pub struct WhenCondition {
     /// HTTP method (GET, POST, PUT, etc.)
     pub method: String,
     /// Request matching criteria (queries, headers, body)
-    pub request: RequestConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<RequestConfig>,
     /// Response to return when request matches
     pub response: ResponseConfig,
     /// Optional delay in milliseconds before sending response
@@ -40,13 +41,13 @@ pub struct RequestConfig {
     /// Map of query parameter names to their matching rules
     /// Key: query parameter name
     /// Value: matching operator and expected value
-    #[serde(default)]
-    pub queries: HashMap<String, QueryParam>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queries: Option<HashMap<String, QueryParam>>,
     /// Map of expected request headers
     /// Key: header name
     /// Value: expected header value
-    #[serde(default)]
-    pub headers: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<HashMap<String, String>>,
     /// Optional JSON body to match against
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<serde_json::Value>,

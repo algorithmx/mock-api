@@ -36,37 +36,48 @@ fn stringfy_nested_value(nested: &NestedValue) -> String {
 }
 
 
+/// Extracts queries from a query string.
+fn extract_queries(query_string: &str) -> HashMap<String, String> {
+  query_string
+  .split('&')
+  .filter_map(|pair| {
+      let mut parts = pair.split('=');
+      match (parts.next(), parts.next()) {
+          (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+          _ => None
+      }
+  })
+  .collect()
+}
+
+
 /// Splits request path into path and query parameters
 fn split_path_and_queries(request_path: &str) -> (&str, HashMap<String, String>) {
-    let mut queries = HashMap::new();
     match request_path.find('?') {
-        Some(query_start) => {
-            let query_string = &request_path[query_start + 1..];
-            queries = query_string
-                .split('&')
-                .filter_map(|pair| {
-                    let mut parts = pair.split('=');
-                    match (parts.next(), parts.next()) {
-                        (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                        _ => None
-                    }
-                })
-                .collect();
-            (&request_path[..query_start], queries)
-        },
-        None => (request_path, queries)
+      None => (request_path, HashMap::new()),
+      Some(query_start) => {
+        let query_string = &request_path[query_start + 1..];
+        let queries = extract_queries(query_string);
+        (&request_path[..query_start], queries)
+      },
     }
 }
 
 
+/// Compares the number of slashes in a pattern and a path.
 fn compare_slash_counts(pattern: &str, path: &str) -> bool {
   let number_of_slashes_in_pattern = pattern.matches('/').count();
   let number_of_slashes_in_path = path.matches('/').count();
   number_of_slashes_in_pattern == number_of_slashes_in_path
 } 
 
+
 /// Handles exact path matching with parameters
-fn handle_exact_path(pattern: &str, path: &str, queries: HashMap<String, String>) -> Option<RequestPath> {
+fn handle_exact_path(pattern: &str, path: &str, queries: &HashMap<String, String>) -> Option<RequestPath> {
+  if !queries.is_empty() {
+    // exact match does not allow queries
+    return None;
+  }
   // count the number of slashes "/" in the pattern and path
   // if the number of slashes is not the same, then the path does not match the pattern => return None
   if !compare_slash_counts(pattern, path) {
@@ -87,25 +98,39 @@ fn handle_exact_path(pattern: &str, path: &str, queries: HashMap<String, String>
   }
   Some(RequestPath {
       path: path.to_string(),
-      queries,
+      queries: HashMap::new(),
       params,
       matches: Vec::new(),
   })
 }
 
 
-/// Handles regex pattern matching
-fn handle_regex_path(pattern: &str, full_path: &str, path: &str, queries: HashMap<String, String>) -> Option<RequestPath> {
-    let regexp = Regex::new(pattern).ok()?;
-    let captures = regexp.captures(full_path)?;
-    let matches: Vec<String> = captures
+/// Constructs the matches from a regex pattern.
+fn construct_matches(regex: &Regex, full_path: &str) -> Option<Vec<String>> {
+  let captures = regex.captures(full_path)?;
+  let matches: Vec<String> = captures
         .iter()
         .skip(1)
         .filter_map(|c| c.map(|m| m.as_str().to_string()))
         .collect();
+  Some(matches)
+}
+
+/// Handles regex pattern matching
+fn handle_regex_path(pattern: &str, full_path: &str, path: &str, queries: &HashMap<String, String>) -> Option<RequestPath> {
+    // from main.rs
+    // currently we only support one level of API path
+    // let r = r"^/projects/(\w+)(/\w+)+(\?(\w+=\w+)(&\w+=\w+)*)?$";  // <-- pattern
+    // explain: 
+    // 1. /projects/ - matches the exact path
+    // 2. (\w+) - matches the project name (matches[0])
+    // 3. (/\w+)+ - matches the API path (with starting slash, e.g. "/api/v1") (matches[1])
+    // 4. (\?(\w+=\w+)(&\w+=\w+)*)? - matches the queries (matches[2])
+    let regexp = Regex::new(pattern).ok()?;
+    let matches = construct_matches(&regexp, full_path)?;
     Some(RequestPath {
         path: path.to_string(),
-        queries,
+        queries: queries.clone(),
         params: HashMap::new(),
         matches,
     })
@@ -123,11 +148,12 @@ pub fn parse_request_path(
       split_path_and_queries(request_path);
     match path_pattern {
         RequestPathPattern::Exact(pattern) => 
-          handle_exact_path(pattern, path, queries),
+          handle_exact_path(pattern, path, &queries),
         RequestPathPattern::Match(pattern) => 
-          handle_regex_path(pattern, request_path, path, queries),
+          handle_regex_path(pattern, request_path, path, &queries),
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -185,7 +211,7 @@ mod tests {
       handle_exact_path(
         "/users/:id/posts/:post_id", 
         "/users/123/posts/456", 
-        queries
+        &queries
       );
     assert!(result.is_some());
     let path = result.unwrap();
@@ -200,7 +226,7 @@ mod tests {
       handle_exact_path(
         "/users/:id",
         "/users/123/extra", 
-        queries
+        &queries
       );
     assert!(result.is_none());
   }
@@ -213,7 +239,7 @@ mod tests {
         r"^/users/(\d+)$",
         "/users/123",
         "/users/123",
-        queries
+        &queries
       );
     assert!(result.is_some());
     let path = result.unwrap();
@@ -227,7 +253,7 @@ mod tests {
       r"^/users/(\d+)/posts/(\w+)$",
       "/users/123/posts/abc",
       "/users/123/posts/abc",
-      queries
+      &queries
     );
     
     assert!(result.is_some());
@@ -243,7 +269,7 @@ mod tests {
         r"^/users/(\d+)$",
         "/posts/123", 
         "/posts/123",
-        queries
+        &queries
       );
     assert!(result.is_none());
   }

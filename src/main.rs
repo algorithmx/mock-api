@@ -35,10 +35,19 @@ fn main() {
 
     server.put("/projects/:name", handlers::save_config());
 
+
+    // DO NOT MODIFY THIS STRING r !!!
+    let r = r"^/projects/(\w+)(/\w+)+(\?(\w+=\w+)(&\w+=\w+)*)?$"; 
+    // explain: 
+    // 1. /projects/ - matches the exact path
+    // 2. (\w+) - matches the project name
+    // 3. (/\w+)+ - matches the API path (with starting slash, e.g. "/api/v1")
+    // 4. (\?(\w+=\w+)(&\w+=\w+)*)? - matches the queries
+    // DO NOT MODIFY THIS REGEX STRING r !!!
     server.request(
       handlers::mock_request(),
       RequestOption {
-        path: web_server::types::RequestPathPattern::Match(r"^/projects/([^/]+)/([^?]+)\?(\w+=\w+)(&\w+=\w+)*$".to_string()),
+        path: web_server::types::RequestPathPattern::Match(r.to_string()),
         method: Method::Get,
       },
     );
@@ -115,41 +124,44 @@ mod tests {
 
     #[test]
     fn test_mock_endpoint() {
-        let server = setup_test_server();
-        
-        // Create test project with comprehensive mock configuration
-        let test_config = r#"{
-            "description": "test-mock1",
-            "endpoints": {
-                "api/test": {
-                    "when": [{
-                        "method": "GET",
-                        "request": {
-                            "queries": {"filter": {"operator": "is", "value": "active"}},
-                            "headers": {"x-test": "value"}
-                        },
-                        "response": {
-                            "status": 200,
-                            "body": "mocked response",
-                            "headers": {"content-type": "text/plain"}
-                        },
-                        "delay": 0
-                    }]
-                }
-            }}"#;
-        let _ = server.test_request(Method::Post, "/projects/test-mock1", None, Some(test_config.to_string()));
-
-        // Test mock endpoint with matching request
-        let mut headers = HashMap::new();
-        headers.insert("x-test".to_string(), "value".to_string());
-        let response = server.test_request(
-            Method::Get, 
-            "/projects/test-mock1/api/test?filter=active", 
-            Some(headers),
-            None
-        );
-        assert_eq!(response.status, 200);
-        assert_eq!(response.body, "mocked response");
-        assert_eq!(response.headers.get("content-type").unwrap(), "text/plain");
+        let test_dir = TempDir::new().unwrap();
+        fs::create_dir_all(test_dir.path().join("projects")).unwrap();
+        temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
+            let server = setup_test_server();
+            // Create test project with comprehensive mock configuration
+            let test_config = r#"{
+                "description": "test-mock1",
+                "endpoints": {
+                    "api/test": {
+                        "when": [{
+                            "method": "GET",
+                            "request": {
+                                "queries": {"filter": {"operator": "is", "value": "active"}},
+                                "headers": {"x-test": "value"}
+                            },
+                            "response": {
+                                "status": 200,
+                                "body": "mocked response",
+                                "headers": {"content-type": "text/plain"}
+                            },
+                            "delay": 0
+                        }]
+                    }
+                }}"#;
+            let response1 = server.test_request(Method::Post, "/projects/test-mock1", None, Some(test_config.to_string()));
+            assert_eq!(response1.status, 200);
+            // Test mock endpoint with matching request
+            let mut headers = HashMap::new();
+            headers.insert("x-test".to_string(), "value".to_string());
+            let response = server.test_request(
+                Method::Get, 
+                "/projects/test-mock1/api/test?filter=active", 
+                Some(headers),
+                None
+            );
+            assert_eq!(response.status, 200);
+            assert_eq!(response.body, "mocked response");
+            assert_eq!(response.headers.get("content-type").unwrap(), "text/plain");
+        });
     }
 }
