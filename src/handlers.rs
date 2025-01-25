@@ -1,4 +1,4 @@
-use crate::{helpers, schema, web_server};
+use crate::{helpers::{self, get_project_config_file_path}, llm::compose_config, schema, web_server};
 use serde_json::Value;
 use std::{collections::HashMap, fs, fs::read_to_string};
 use web_server::types::{Nested, Request, Response};
@@ -60,6 +60,71 @@ pub fn save_config() -> impl Fn(Request) -> Response {
     }
   }
 }
+
+
+pub fn build_config_with_llm() -> impl Fn(Request) -> Response {
+    |request: Request| {
+        let project_name = match request.params.get("name") {
+            Some(name) => name,
+            None => {
+                let mut body = Nested::new();
+                body.insert_string("error".to_string(), "Project name missing.".to_string());
+                return Response::json(400, body, None);
+            }
+        };
+        let config_file_path = get_project_config_file_path(project_name);
+
+        let config = match compose_config(&request.body) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("Failed to compose config: {}", e);
+                let mut body = Nested::new();
+                body.insert_string("error".to_string(), "Invalid configuration received from LLM.".to_string());
+                return Response::json(400, body, None);
+            }
+        };
+
+        let project_config: schema::ProjectConfig = match serde_json::from_str(&config) {
+            Ok(val) => val,
+            Err(e) => {
+                eprintln!("Deserialization error (schema validation): {}", e);
+                let mut body = Nested::new();
+                body.insert_string("error".to_string(), "Configuration json received from LLM is not compatible with the schema.".to_string());
+                return Response::json(400, body, None);
+            }
+        };
+
+        let config_value: Nested = match serde_json::to_value(&project_config) {
+            Ok(value) => {
+                match serde_json::from_value(value) {
+                    Ok(nested) => nested,
+                    Err(e) => {
+                        eprintln!("Failed to convert ProjectConfig to Nested: {}", e);
+                        let mut body = Nested::new();
+                        body.insert_string("error".to_string(), "Internal server error".to_string());
+                        return Response::json(500, body, None);
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("Serialization error (ProjectConfig to serde_json::Value): {}", e);
+                let mut body = Nested::new();
+                body.insert_string("error".to_string(), "Internal server error".to_string());
+                return Response::json(500, body, None);
+            }
+        };
+
+        if let Err(e) = fs::write(config_file_path, config) {
+            eprintln!("Failed to write config file: {}", e);
+            let mut body = Nested::new();
+            body.insert_string("error".to_string(), format!("Failed to save config: {}", e));
+            return Response::json(500, body, None);
+        }
+
+        Response::json(200, config_value, None)
+    }
+}
+
 
 
 pub fn mock_request() -> impl Fn(Request) -> Response {

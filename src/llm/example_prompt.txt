@@ -1,0 +1,67 @@
+## Example 
+
+The json below describes a mock-api configuration for the project "test-mock-project" 
+that mimics an API endpoint `/api/v1`. 
+When sending `http://localhost:3000/projects/test-mock-project/api/v1?filter=active`, 
+with header `{"x-test": "value"}`, the API mock immediately returns
+status 200 with body contains plain text "mocked response from v1".
+For an upgraded API endpoint version `/api/v2`, 
+when sending `http://localhost:3000/projects/test-mock-project/api/v2?filter=active`, 
+with header `{"x-test": "value"}`, the API mock returns
+status 200 with body contains plain text "mocked response from v2", with a delay of 400 ms.
+When sending `http://localhost:3000/projects/test-mock-project/api/v2?filter=inactive`, 
+with header `{"x-test": "value"}`, the API mock immediately returns
+status 200 with body contains plain text "v2 is inactive".
+
+```json
+{
+    "description": "test-mock-project",
+    "endpoints": {
+        "/api/v1": {
+            "when": [{
+                "method": "GET",
+                "request": {
+                    "queries": {"filter": {"operator": "is", "value": "active"}},
+                    "headers": {"x-test": "value"}
+                },
+                "response": {
+                    "status": 200,
+                    "body": "mocked response v1",
+                    "headers": {"content-type": "text/plain"}
+                },
+                "delay": 0
+            }]
+        },
+        "/api/v2": {
+            "when": [{
+                "method": "GET",
+                "request": {
+                    "queries": {"filter": {"operator": "is", "value": "active"}},
+                    "headers": {"x-test": "value"}
+                },
+                "response": {
+                    "status": 200,
+                    "body": "mocked response v2",
+                    "headers": {"content-type": "text/plain"}
+                },
+                "delay": 400
+            },
+            {
+                "method": "GET",
+                "request": {
+                    "queries": {"filter": {"operator": "is", "value": "inactive"}},
+                    "headers": {"x-test": "value"}
+                },
+                "response": {
+                    "status": 200,
+                    "body": "v2 is inactive",
+                    "headers": {"content-type": "text/plain"}
+                },
+                "delay": 0
+            }]
+        }
+    }
+}
+```
+
+Now write configuration json based on the user's descriptions of the API requirements.

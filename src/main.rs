@@ -5,9 +5,12 @@ use web_server::{
   Server, ServerConf,
 };
 
+mod llm;
+
 mod schema;
 mod handlers;
 mod helpers;
+
 
 fn init() -> (String, usize, String) {
     let server_addr = format!("127.0.0.1:{}", helpers::get_env_var("MOCK_SERVER_PORT", "53500".to_string()));
@@ -35,6 +38,7 @@ fn main() {
 
     server.put("/projects/:name", handlers::save_config());
 
+    server.post("/llm/:name", handlers::build_config_with_llm());
 
     // DO NOT MODIFY THIS STRING r !!!
     let r = r"^/projects/(\w+)(/\w+)+(\?(\w+=\w+)(&\w+=\w+)*)?$"; 
