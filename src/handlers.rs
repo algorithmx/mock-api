@@ -162,6 +162,9 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
         let path = request.matches.get(1).unwrap();
         let method = request.method.to_uppercase();
 
+        println!("|-- path: {:?}", path);
+        println!("|-- method: {:?}", method);
+
         // Find matching endpoint and condition
         if let Some(endpoint) = project_config.endpoints.get(path) {
             for condition in &endpoint.when {
@@ -172,7 +175,6 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
                         if condition.delay > 0 {
                             std::thread::sleep(std::time::Duration::from_millis(condition.delay));
                         }
-
                         // Convert response body to string, handling null properly
                         let body = condition.response.body
                             .as_ref()
@@ -293,7 +295,7 @@ fn check_headers(request_headers: &HashMap<String, String>, headers_from_cond_re
             return true; // All expected headers matched
         }
         None => {
-            return request_headers.is_empty();
+            return true; // allow for any content in headers
         }
     }
 }

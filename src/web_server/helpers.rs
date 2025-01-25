@@ -161,6 +161,60 @@ pub fn parse_request_path(
 }
 
 
+pub fn parse_tcp_stream(stream: &mut TcpStream) -> Result<Request, IoError> {
+  let mut buf_reader = BufReader::new(stream);
+  let mut start_line = String::new();
+  buf_reader.read_line(&mut start_line)?;
+
+  let mut start_line_parts = start_line.split_whitespace();
+  let method = start_line_parts.next().unwrap().to_uppercase();
+  let path = start_line_parts.next().unwrap().to_owned();
+  let version = start_line_parts.next().unwrap().to_owned();
+
+  // Read the headers.
+  let mut headers = HashMap::new();
+  loop {
+    let mut line = String::new();
+    buf_reader.read_line(&mut line)?;
+    if line.trim().is_empty() {
+      break;
+    }
+    if let Some(pos) = line.find(':') {
+      let key = line[..pos].trim().to_owned();
+      let value = line[pos + 1..].trim().to_owned();
+      headers.insert(key, value);
+    }
+  }
+
+  // Read the body.
+  let mut body = String::new();
+  if method == "POST" || method == "PUT" {
+    let content_length = headers
+      .get("Content-Length")
+      .and_then(|v| v.parse::<usize>().ok())
+      .unwrap_or(0);
+
+    if content_length > 0 {
+      let mut buffer = vec![0; content_length];
+      buf_reader.read_exact(&mut buffer)?;
+      body = String::from_utf8(buffer).unwrap();
+    }
+  }
+
+  Ok(Request {
+    path,
+    version,
+    method,
+    headers,
+    body,
+    queries: HashMap::new(),
+    params: HashMap::new(),
+    matches: Vec::new(),
+  })
+}
+
+
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -279,56 +333,4 @@ mod tests {
       );
     assert!(result.is_none());
   }
-}
-
-pub fn parse_tcp_stream(stream: &mut TcpStream) -> Result<Request, IoError> {
-  let mut buf_reader = BufReader::new(stream);
-  let mut start_line = String::new();
-  buf_reader.read_line(&mut start_line)?;
-
-  let mut start_line_parts = start_line.split_whitespace();
-  let method = start_line_parts.next().unwrap().to_uppercase();
-  let path = start_line_parts.next().unwrap().to_owned();
-  let version = start_line_parts.next().unwrap().to_owned();
-
-  // Read the headers.
-  let mut headers = HashMap::new();
-  loop {
-    let mut line = String::new();
-    buf_reader.read_line(&mut line)?;
-    if line.trim().is_empty() {
-      break;
-    }
-    if let Some(pos) = line.find(':') {
-      let key = line[..pos].trim().to_owned();
-      let value = line[pos + 1..].trim().to_owned();
-      headers.insert(key, value);
-    }
-  }
-
-  // Read the body.
-  let mut body = String::new();
-  if method == "POST" || method == "PUT" {
-    let content_length = headers
-      .get("Content-Length")
-      .and_then(|v| v.parse::<usize>().ok())
-      .unwrap_or(0);
-
-    if content_length > 0 {
-      let mut buffer = vec![0; content_length];
-      buf_reader.read_exact(&mut buffer)?;
-      body = String::from_utf8(buffer).unwrap();
-    }
-  }
-
-  Ok(Request {
-    path,
-    version,
-    method,
-    headers,
-    body,
-    queries: HashMap::new(),
-    params: HashMap::new(),
-    matches: Vec::new(),
-  })
 }
