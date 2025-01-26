@@ -17,17 +17,75 @@ developers to conform to the design goal while
 sprinting to their minimal viable product. 
 
 
+This project aims for a configurable API 
+mock tool. The user can create an endpoint 
+and define its behavior by POSTing 
+a configuration json to the API mock server. 
+Afterwards, the endpoint responses to various 
+queries from any user based on such configuration. 
+
+The API mock server is optimized to be  
+responsive and it can survive modest amount 
+of concurrent incoming requests.
+
+This is my first serious Rust project. 
+
+## Usage
+
+### Compile and test
+
+The project is ready to be compiled by `cargo build`. 
+However, additional preparation on environment 
+is necessary, namely:
+  - Server port: the env var `MOCK_SERVER_PORT` defines te server port.
+    If it is not privided, the server listens on port 53500 on the localhost.
+  - Data root folder: the env var `MOCK_SERVER_DB_ROOT` defines the root folder 
+    where the server persists the data from the user. Such folder 
+    must exist and must contain a writable subfolder with name
+    `projects`.
+
+To compile and test the code, run the following inside the folder where `Cargo.toml` is located:
+```bash
+$ mkdir -p projects
+$ export MOCK_SERVER_PORT=8001 && export RUST_BACKTRACE=1 && export MOCK_SERVER_DB_ROOT=`pwd` && cargo build && cargo test
+```
+
+### Launch
+
+To run the server, just modify the last word in the above command, 
+from `test` to `run`:
+```bash
+$ mkdir -p projects
+$ export MOCK_SERVER_PORT=8001 && export RUST_BACKTRACE=1 && export MOCK_SERVER_DB_ROOT=`pwd` && cargo build && cargo run
+```
+
+Please open issues on whatever reproducible problems you have ever 
+encountered. 
+
+## Main contributions from Yunlong
+
+1. Implemented full functionalities
+
+2. Added `schema.rs` file as a format constraint for the configuration json
+
+3. Added LLM support, so that the user can create mock API
+from natural language.
+
+4. Refactored codes
+
+5. Performance optimization
+
+6. Rewrote the regex for the endpoint with query string and redesign the logic behind the `mock_request`
+
+7. Remove the code for thread pool and use `tikio` to handle concurrent requests.
+
+8. Added `/api-doc` page
+
+9. Added tests
 
 
 
-
-## [Yunlong]
-
-Hi! This is my first serious Rust project. It mocks the API behavior defined in a configuration file. 
-
-Look at [`prompt/p1.txt`](prompt/p1.txt) for details.
-
-### TODO
+## TODO
 
 I see the full potential in adapting the original `mock-api` project into an AI-enabled API mock tool. 
 
@@ -47,33 +105,7 @@ Now I am almost there with an experimental endpoint `/llm/:name`, which accepts 
 }
 ```
 
-### Launch
 
-To test:
-```bash
-$ mkdir projects
-$ export MOCK_SERVER_PORT=8001 && export RUST_BACKTRACE=1 && export MOCK_SERVER_DB_ROOT=`pwd` && cargo build && cargo test
-```
-
-To run:
-```bash
-$ mkdir -p projects
-$ export MOCK_SERVER_PORT=8001 && export RUST_BACKTRACE=1 && export MOCK_SERVER_DB_ROOT=`pwd` && cargo build && cargo run
-```
-
-### Main contributions
-
-1. Implemented full functionalities
-
-2. Added `schema.rs` file as a format constraint for the configuration json
-
-3. Added tests
-
-4. Refactored codes
-
-5. Rewrote the regex for the endpoint with query string and redesign the logic behind the `mock_request`
-
-6. Added `/api-doc` page
 
 ---
 
