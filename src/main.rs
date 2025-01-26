@@ -10,7 +10,7 @@ mod llm;
 mod schema;
 mod handlers;
 mod helpers;
-
+mod cache;
 
 fn init() -> (String, usize, String) {
     let server_addr = format!("127.0.0.1:{}", helpers::get_env_var("MOCK_SERVER_PORT", "53500".to_string()));

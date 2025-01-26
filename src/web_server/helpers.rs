@@ -6,7 +6,7 @@ use std::{
   net::TcpStream,
 };
 
-use super::types::{Nested, NestedValue, Request, RequestPath, RequestPathPattern};
+use super::types::{Nested, NestedValue, Request, RequestPath, RequestPathPattern, Method};
 
 
 /// Converts a [Nested] to a JSON string.
@@ -167,7 +167,7 @@ pub fn parse_tcp_stream(stream: &mut TcpStream) -> Result<Request, IoError> {
   buf_reader.read_line(&mut start_line)?;
 
   let mut start_line_parts = start_line.split_whitespace();
-  let method = start_line_parts.next().unwrap().to_uppercase();
+  let method = start_line_parts.next().unwrap().to_owned();
   let path = start_line_parts.next().unwrap().to_owned();
   let version = start_line_parts.next().unwrap().to_owned();
 
@@ -204,7 +204,13 @@ pub fn parse_tcp_stream(stream: &mut TcpStream) -> Result<Request, IoError> {
   Ok(Request {
     path,
     version,
-    method,
+    method: match method.as_str() {
+        "GET" => Method::Get,
+        "POST" => Method::Post,
+        "PUT" => Method::Put,
+        //"DELETE" => Method::Delete,
+        _ => Method::Get, // Default case, adjust as needed
+    },
     headers,
     body,
     queries: HashMap::new(),

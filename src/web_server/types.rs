@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
 pub struct RequestPath {
   pub path: String,
   pub queries: HashMap<String, String>,
@@ -12,7 +13,7 @@ pub struct RequestPath {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Request {
-  pub method: String,
+  pub method: Method,
   pub path: String,
   pub version: String,
   pub headers: HashMap<String, String>,
@@ -22,6 +23,7 @@ pub struct Request {
   pub matches: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Method {
   Get,
   Post,
