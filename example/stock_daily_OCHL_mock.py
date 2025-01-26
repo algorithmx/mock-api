@@ -68,6 +68,7 @@ def create_mock_config(stock_data_dict):
     }
     return config
 
+
 def process_stock(symbol, start_date, end_date):
     print(f"Processing {symbol}")
     df = fetch_stock_data(symbol, start_date, end_date)
@@ -122,17 +123,9 @@ def fetch_all_and_save():
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving configuration to file: {e}")
-    
 
 
-def main():
-    if not os.path.exists('stock_daily_config.json'):
-        fetch_all_and_save()
-    else:
-        print("stock_daily_config.json already exists")
-
-    config = json.load(open('stock_daily_config.json', 'r', encoding='utf-8'))
-
+def post_config(config):
     # Post configuration to server
     try:
         # 25 days data of 5685 stocks, this is a stress test on the POST endpoint of the server
@@ -145,6 +138,17 @@ def main():
         print(response.text)
     except Exception as e:
         print(f"Error posting to server: {e}")
+
+
+def main():
+    if not os.path.exists('stock_daily_config.json'):
+        fetch_all_and_save()
+    else:
+        print("stock_daily_config.json already exists")
+
+    config = json.load(open('stock_daily_config.json', 'r', encoding='utf-8'))
+    post_config(config)
+
 
 if __name__ == "__main__":
     main()
