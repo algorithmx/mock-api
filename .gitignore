@@ -4,6 +4,7 @@ projects
 Cargo.lock
 .json
 .csv
+.txt
 example/Pipfile.lock
 example/*.json
 example/*.csv
