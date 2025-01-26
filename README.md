@@ -111,24 +111,11 @@ from natural language.
 
 ## TODO
 
-I see the full potential in adapting the original `mock-api` project into an AI-enabled API mock tool. 
-
-What I eventually want is:
-
-```plaintext
-Human language API requirement specification ==> LLM ==> Configuration Json
-```
-
-Now I am almost there with an experimental endpoint `/llm/:name`, which accepts a POST with JSON body:
-```json
-{
-	"api_url":"https://api.deepseek.com/chat/completions",
-	"api_model":"deepseek-chat",
-  "api_key":"YOUR_API_KEY_HERE",
-  "prompt":"(Your API requirement specifications prompt...)"
-}
-```
-
+The request processing time before dispatching, plus
+the reaponse sending time after the mock result is ready,
+takes more that 1ms. 
+This is not acceptable on a local machine. 
+Further optimization efforts needed on this issue. 
 
 
 ---
