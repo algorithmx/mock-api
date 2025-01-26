@@ -1,5 +1,25 @@
-Note
+Mock API
 ===
+
+Modern Web application development process
+typically involves frontend and backend 
+development. Frontend presents business logic 
+to the user via API provided by backend. The 
+design of API is crucial to the entire project. 
+In the early stage of the development, 
+the frontend and backend developers work in parallel 
+on a common design goal. In this stage, an API
+mock tool is desirable. Such tool is beneficial 
+to the frontend developers to allow them to 
+immediately test design ideas that involves 
+querying on backend API. It also good for backend 
+developers to conform to the design goal while 
+sprinting to their minimal viable product. 
+
+
+
+
+
 
 ## [Yunlong]
 
