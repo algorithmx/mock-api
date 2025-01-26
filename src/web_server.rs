@@ -3,17 +3,21 @@ use std::{
   io::Write,
   net::{TcpListener, TcpStream},
   sync::{Arc, Mutex},
+  time::Duration,
+  sync::atomic::{AtomicBool, Ordering}
 };
 
 mod helpers;
-mod thread_pool;
+
 pub mod types;
 
 use types::{Request, Response};
 
-pub use thread_pool::ThreadPool;
-
 use self::types::{Method, Nested, RequestOption, RequestPathPattern};
+
+// multiple threads are not needed, as tokio handles concurrency internally
+use tokio::runtime::Runtime;
+use tokio::task;
 
 pub struct Listener {
   path: RequestPathPattern,
@@ -23,53 +27,53 @@ pub struct Listener {
 
 type Handler = Box<dyn Fn(Request) -> Response + Send + 'static>;
 
+
 pub struct Server {
-  max_connections: usize,
+  // max_connections: usize, // TODO: remove this
   connection_handler: Arc<Mutex<ConnectionHandler>>,
+  running: Arc<AtomicBool>,
 }
 
+
+#[allow(dead_code)]
 pub struct ServerConf {
   pub max_connections: usize,
 }
 
+
 impl Server {
+
+  #[allow(unused_variables)]
   pub fn new(conf: ServerConf) -> Server {
     Server {
-      max_connections: conf.max_connections,
+      // max_connections: conf.max_connections,
+      // TODO properly set the max_connections
       connection_handler: Arc::new(Mutex::new(ConnectionHandler::new())),
+      running: Arc::new(AtomicBool::new(true)),
     }
   }
 
+  // TODO: remove this
+  // pub fn stop(&self) {
+  //   self.running.store(false, Ordering::SeqCst);
+  // }
+
   pub fn listen(&self, addr: String) {
-    // Some possible reasons for binding to fail:
-    // - connecting to a port requires administrator privileges.
-    // - listening to a port which is occupied.
-    let listener = TcpListener::bind(addr).unwrap();
+    let rt = Runtime::new().unwrap();
 
-    // Limit the number of threads in the pool to a small number to protect us
-    // from Denial of Service (DoS) attacks.
-    let pool = ThreadPool::new(self.max_connections);
-
-    for stream in listener.incoming() {
-      // The browser signals the end of an HTTP request by sending two newline
-      // characters in a row.
-      // The reason we might receive errors from the incoming method when a client
-      // connects to the server is that we're not actually iterating over
-      // connections. Instead, we're iterating over connection attempts. The
-      // connection might not be successful for a number of reasons, many of them
-      // operating system specific. For example, many operating systems have a
-      // limit to the number of simultaneous open connections they can support;
-      // new connection attempts beyond that number will produce an error until
-      // some of the open connections are closed.
-      let stream = stream.unwrap();
-
-      let connection_handler = self.connection_handler.clone();
-
-      pool.execute(move || {
-        let connection_handler = connection_handler.lock().unwrap();
-        connection_handler.handle_connection(stream);
-      });
-    }
+    rt.block_on(async {
+      let listener = TcpListener::bind(addr).unwrap();
+      
+      while self.running.load(Ordering::SeqCst) {
+        if let Ok((stream, _)) = listener.accept() {
+          let connection_handler = self.connection_handler.clone();
+          task::spawn(async move {
+            let connection_handler = connection_handler.lock().unwrap();
+            connection_handler.handle_connection(stream);
+          });
+        }
+      }
+    });
   }
 
   pub fn request<F>(&mut self, request_handler: F, option: RequestOption)
@@ -130,7 +134,7 @@ impl Server {
     
     for listener in &connection_handler.listeners {
         if let Some(parsed_path) = helpers::parse_request_path(&listener.path, &request.path) {
-            if listener.method.to_string() == request.method {
+            if listener.method == request.method {
                 let mut request = request.clone();
                 request.path = parsed_path.path;
                 request.queries = parsed_path.queries;
@@ -150,7 +154,7 @@ impl Server {
   #[cfg(test)]
   pub fn test_request(&self, method: Method, path: &str, headers: Option<HashMap<String, String>>, body: Option<String>) -> Response {
     let request = Request {
-      method: method.to_string(),
+      method: method.clone(),
       path: path.to_string(),
       headers: headers.unwrap_or(HashMap::new()),
       body: body.unwrap_or("".to_string()),
@@ -206,13 +210,14 @@ impl ConnectionHandler {
   }
 
   fn dispatch_request(&self, request: Request) -> (u16, String, String) {
+    println!("|-- dispatching request");
     for listener in self.listeners.iter() {
       if let Some(parsed_path) = 
         helpers::parse_request_path(
           &listener.path,
           &request.path
         ) {
-        if listener.method.to_string() == request.method {
+        if listener.method == request.method {
           let mut request = request;
           request.path = parsed_path.path;
           request.queries = parsed_path.queries;
@@ -237,15 +242,27 @@ impl ConnectionHandler {
   }
 
   pub fn handle_connection(&self, mut stream: TcpStream) {
-    let request = helpers::parse_tcp_stream(&mut stream).unwrap();
-    let (response_status, response_body, response_headers) = 
-      self.dispatch_request(request);
-    let length = response_body.len();
-    let response = format!(
-      "HTTP/1.1 {response_status}\r\n{response_headers}Content-Length: {length}\r\n\r\n{response_body}"
-    );
+    // Set read timeout to prevent hanging
+    stream.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+    
+    let result = (|| {
+        let request = helpers::parse_tcp_stream(&mut stream)?;
+        let (response_status, response_body, response_headers) = 
+            self.dispatch_request(request);
+        let length = response_body.len();
+        let response = format!(
+            "HTTP/1.1 {response_status}\r\n{response_headers}Content-Length: {length}\r\n\r\n{response_body}"
+        );
+        stream.write_all(response.as_bytes())?;
+        stream.flush()?;
+        Ok::<_, std::io::Error>(())
+    })();
 
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
+    if let Err(e) = result {
+        eprintln!("Connection error: {}", e);
+    }
+    
+    // Ensure stream is properly closed
+    drop(stream);
   }
 }

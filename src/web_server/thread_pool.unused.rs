@@ -1,6 +1,7 @@
 use std::{
-  sync::{mpsc, Arc, Mutex},
+  sync::{atomic::{AtomicBool, Ordering}, mpsc::{self, RecvTimeoutError}, Arc, Mutex},
   thread,
+  time::Duration,
 };
 
 // A thread pool is a group of spawned threads that are waiting and ready to
@@ -8,16 +9,22 @@ use std::{
 // threads in the pool to the task, and that thread will process the task. The
 // remaining threads in the pool are available to handle any other tasks that
 // come in while the first thread is processing. When the first thread is done
-// processing its task, it’s returned to the pool of idle threads, ready to
+// processing its task, it's returned to the pool of idle threads, ready to
 // handle a new task.
 // A thread pool allows you to process connections concurrently.
 pub struct ThreadPool {
   workers: Vec<Worker>,
-  sender: Option<mpsc::Sender<Job>>,
+  sender: Option<mpsc::Sender<Message>>,
+  running: Arc<AtomicBool>,
 }
 
 // Alia for a `Box` that holds the type of closure that execute receives.
 type Job = Box<dyn FnOnce() + Send + 'static>;
+
+enum Message {
+    Job(Job),
+    Terminate
+}
 
 impl ThreadPool {
   /// Create a new ThreadPool.
@@ -40,6 +47,7 @@ impl ThreadPool {
     // will ensure that only one worker gets a job from the `receiver` at a
     // time.
     let receiver = Arc::new(Mutex::new(receiver));
+    let running = Arc::new(AtomicBool::new(true));
 
     let mut workers = Vec::with_capacity(size);
 
@@ -51,12 +59,14 @@ impl ThreadPool {
         // Clone the `Arc` to bump the reference count so the workers can share
         // ownership of the `receiver`.
         Arc::clone(&receiver),
+        Arc::clone(&running),
       ));
     }
 
     ThreadPool {
       workers,
       sender: Some(sender),
+      running,
     }
   }
 
@@ -82,23 +92,28 @@ impl ThreadPool {
     // executing, meaning the receiving end has stopped receiving new messages.
     // At the moment, we can't stop our threads from executing: our threads
     // continue executing as long as the pool exists. The reason we use unwrap
-    // is that we know the failure case won’t happen, but the compiler doesn't
+    // is that we know the failure case won't happen, but the compiler doesn't
     // know that.
-    self.sender.as_ref().unwrap().send(job).unwrap();
+    self.sender.as_ref().unwrap().send(Message::Job(job)).unwrap();
   }
 }
 
 impl Drop for ThreadPool {
   fn drop(&mut self) {
+    // Signal threads to stop
+    self.running.store(false, Ordering::SeqCst);
+    
+    // Send terminate message to all workers
+    for _ in &self.workers {
+      self.sender.as_ref().unwrap().send(Message::Terminate).unwrap();
+    }
+    
+    // Drop the sender to close the channel
     drop(self.sender.take());
-
-    // Tell the threads they should stop accepting new requests and shut down.
+    
+    // Wait for all workers to finish
     for worker in &mut self.workers {
       println!("Shutting down worker {}", worker.id);
-
-      // Use `if let` to destructure the `Some` and get the thread.
-      // The `take` method on `Option` takes the `Some` variant out and leaves
-      // `None` in its place.
       if let Some(thread) = worker.thread.take() {
         thread.join().unwrap();
       }
@@ -128,43 +143,24 @@ struct Worker {
 }
 
 impl Worker {
-  fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+  fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>, running: Arc<AtomicBool>) -> Worker {
     // Spawn a JoinHandle<()> instance using an empty closure.
     // If the operating system can't create a thread because there aren't enough
     // system resources, `thread::spawn` will panic. That will cause our whole
     // server to panic, even though the creation of some threads might succeed.
     // TODO(Zhiguang): use `std::thread::Builder` and its spawn method that
     // returns Result instead.
-    let thread = thread::spawn(move || loop {
-      // Loop forever, asking the receiving end of the channel for a job and
-      // running the job when it gets one.
-      let message = receiver
-        // Call lock on the receiver to acquire the mutex.
-        .lock()
-        // Call `unwrap` to panic on any errors. Acquiring a lock might fail if
-        // the mutex is in a _poisoned_ state, which can happen if some other
-        // thread panicked while holding the lock rather than releasing the
-        // lock. In this situation, calling `unwrap` to have this thread panic
-        // is the correct action to take.
-        .unwrap()
-        // Call `recv` to receive a `Job` from the channel. If there is no job
-        // yet, the current thread will wait until a job becomes available.
-        // The `Mutex<T>` ensures that only one `Worker` thread at a time is
-        // trying to request a job.
-        .recv();
-
-      match message {
-        Ok(job) => {
-          // println!("Worker {id} got a job; executing.");
-
-          job();
-        }
-        // Errors might occur if the thread holding the sender has shut down,
-        // similar to how the `send` method returns `Err` if the receiver shuts
-        // down.
-        Err(_) => {
-          println!("Worker {id} disconnected; shutting down.");
-          break;
+    let thread = thread::spawn(move || {
+      while running.load(Ordering::SeqCst) {
+        // Use recv_timeout to prevent infinite blocking
+        let message = receiver.lock().unwrap().recv_timeout(Duration::from_secs(1));
+        match message {
+          Ok(Message::Job(job)) => {
+            job();
+          }
+          Ok(Message::Terminate) => break,
+          Err(RecvTimeoutError::Timeout) => continue,
+          Err(RecvTimeoutError::Disconnected) => break,
         }
       }
     });
