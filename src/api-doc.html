@@ -3,44 +3,316 @@
 <head>
   <title>Mock API Documentation</title>
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-    .endpoint { margin: 20px 0; padding: 10px; border: 1px solid #ddd; }
-    code { background: #f5f5f5; padding: 2px 4px; }
+    body { font-family: sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .endpoint { margin: 30px 0; padding: 25px; border: 1px solid #ddd; border-radius: 8px; background-color: #fafafa; }
+    code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+    h3 { color: #2c3e50; }
+    h4 { color: #34495e; }
+    pre { background: #f0f0f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    .note { background: #e8f8f5; padding: 15px; border-left: 5px solid #1abc9c; border-radius: 3px; margin: 20px 0; }
+    .example { background: #fdf0d5; padding: 10px; border-left: 5px solid #f39c12; border-radius: 3px; margin: 10px 0; }
+    ul { line-height: 1.6; }
+    a { color: #2980b9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <h1>Mock API Documentation</h1>
+  
+  <div class="note">
+    <p><strong>Note:</strong> All endpoints require the project name as a path parameter. The project name must be alphanumeric and match the pattern <code>\w+</code>.</p>
+  </div>
 
+  <!-- GET /projects/:name -->
   <div class="endpoint">
     <h3>GET /projects/:name</h3>
-    <p>Get a project's configuration</p>
-    <p>Returns the project configuration file if it exists, otherwise returns 404</p>
+    <p>Retrieve a project's configuration.</p>
+    
+    <h4>Parameters</h4>
+    <ul>
+      <li><code>:name</code> - The name of the project (alphanumeric)</li>
+    </ul>
+    
+    <h4>Responses</h4>
+    <ul>
+      <li><code>200 OK</code> - Returns the project configuration in JSON format</li>
+      <li><code>404 Not Found</code> - Project does not exist</li>
+    </ul>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>GET http://localhost:8001/projects/sales</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>{
+  "description": "sales",
+  "endpoints": {
+    "statistics": {
+      "when": [
+        {
+          "method": "GET",
+          "response": {
+            "status": 200,
+            "body": {"Q1 total": 100, "Q2 total": 200},
+            "headers": {"content-type": "application/json"}
+          },
+          "delay": 0
+        }
+      ]
+    }
+  }
+}</code></pre>
+    </div>
   </div>
 
+  <!-- POST /projects/:name -->
   <div class="endpoint">
     <h3>POST /projects/:name</h3>
-    <p>Create a new project configuration</p>
-    <p>Creates a new project if it doesn't exist, returns 400 if project already exists</p>
+    <p>Create a new project configuration.</p>
+    
+    <h4>Parameters</h4>
+    <ul>
+      <li><code>:name</code> - The name of the project (alphanumeric)</li>
+    </ul>
+    
+    <h4>Request Body</h4>
+    <p>JSON configuration following the <a href="#mock-configuration-format">Mock Configuration Format</a>.</p>
+    
+    <h4>Responses</h4>
+    <ul>
+      <li><code>200 Created</code> - Project created successfully</li>
+      <li><code>400 Bad Request</code> - Project already exists or invalid configuration</li>
+    </ul>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>POST http://localhost:8001/projects/sales
+Content-Type: application/json
+
+{
+  "description": "sales",
+  "endpoints": {
+    "statistics": {
+      "when": [
+        {
+          "method": "GET",
+          "response": {
+            "status": 200,
+            "body": {"Q1 total": 100, "Q2 total": 200},
+            "headers": {"content-type": "application/json"}
+          },
+          "delay": 0
+        }
+      ]
+    }
+  }
+}</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>{
+  "message": "Project 'sales' created successfully."
+}</code></pre>
+      
+      <h4>Example Response (400)</h4>
+      <pre><code>{
+  "error": "Project already exists or invalid configuration."
+}</code></pre>
+    </div>
   </div>
 
+  <!-- PUT /projects/:name -->
   <div class="endpoint">
     <h3>PUT /projects/:name</h3>
-    <p>Update an existing project configuration</p>
-    <p>Updates project if it exists, returns 400 if project doesn't exist</p>
+    <p>Update an existing project configuration.</p>
+    
+    <h4>Parameters</h4>
+    <ul>
+      <li><code>:name</code> - The name of the project (alphanumeric)</li>
+    </ul>
+    
+    <h4>Request Body</h4>
+    <p>JSON configuration following the <a href="#mock-configuration-format">Mock Configuration Format</a>.</p>
+    
+    <h4>Responses</h4>
+    <ul>
+      <li><code>200 OK</code> - Project updated successfully</li>
+      <li><code>400 Bad Request</code> - Project does not exist or invalid configuration</li>
+    </ul>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>PUT http://localhost:8001/projects/sales
+Content-Type: application/json
+
+{
+  "description": "sales updated",
+  "endpoints": {
+    "statistics": {
+      "when": [
+        {
+          "method": "GET",
+          "response": {
+            "status": 200,
+            "body": {"Q1 total": 150, "Q2 total": 250},
+            "headers": {"content-type": "application/json"}
+          },
+          "delay": 0
+        }
+      ]
+    }
+  }
+}</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>{
+  "message": "Project 'sales' updated successfully."
+}</code></pre>
+      
+      <h4>Example Response (400)</h4>
+      <pre><code>{
+  "error": "Project does not exist or invalid configuration."
+}</code></pre>
+    </div>
   </div>
 
+  <!-- GET /projects/:project_name/:path -->
   <div class="endpoint">
     <h3>GET /projects/:project_name/:path</h3>
-    <p>Mock an API endpoint based on project configuration</p>
-    <p>Returns mock response based on matching configuration in project file</p>
+    <p>Mock an API endpoint based on project configuration.</p>
     
-    <h4>Request Pattern</h4>
+    <h4>Parameters</h4>
     <ul>
-      <li>URL Pattern: <code>^/projects/([^/]+)/([^?]+)</code></li>
-      <li>Method: GET</li>
+      <li><code>:project_name</code> - The name of the project (alphanumeric)</li>
+      <li><code>:path</code> - The API endpoint path to mock</li>
     </ul>
+    
+    <h4>Query Parameters</h4>
+    <p>Optional query parameters can be used to match specific conditions in the configuration.</p>
+    
+    <h4>Responses</h4>
+    <ul>
+      <li><code>200 OK</code> - Returns the configured mock response</li>
+      <li><code>400 Bad Request</code> - Project does not exist</li>
+      <li><code>406 Not Acceptable</code> - No matching endpoint configuration</li>
+    </ul>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>GET http://localhost:8001/projects/sales/statistics?filter=active</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>{
+  "Q1 total": 100,
+  "Q2 total": 200
+}</code></pre>
+      
+      <h4>Example Response (400)</h4>
+      <pre><code>{
+  "error": "Project does not exist."
+}</code></pre>
+      
+      <h4>Example Response (406)</h4>
+      <pre><code>{
+  "error": "No matching endpoint configuration."
+}</code></pre>
+    </div>
+  </div>
 
-    <h4>Mock Configuration Format</h4>
+  <!-- POST /llm/:name -->
+  <div class="endpoint">
+    <h3>POST /llm/:name</h3>
+    <p>Generate a project configuration using a Language Model (LLM).</p>
+    
+    <h4>Parameters</h4>
+    <ul>
+      <li><code>:name</code> - The name of the project (alphanumeric)</li>
+    </ul>
+    
+    <h4>Request Body</h4>
+    <p>JSON object containing the LLM configuration and the API requirement specifications.</p>
+    <pre><code>{
+  "api_url": "https://api.deepseek.com/chat/completions",
+  "api_model": "deepseek-chat",
+  "api_key": "YOUR_API_KEY_HERE",
+  "prompt": "Your API requirement specifications..."
+}</code></pre>
+    
+    <h4>Responses</h4>
+    <ul>
+      <li><code>200 OK</code> - Configuration generated successfully</li>
+      <li><code>400 Bad Request</code> - Invalid request or LLM error</li>
+    </ul>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>POST http://localhost:8001/llm/sales
+Content-Type: application/json
+
+{
+  "api_url": "https://api.deepseek.com/chat/completions",
+  "api_model": "deepseek-chat",
+  "api_key": "YOUR_API_KEY_HERE",
+  "prompt": "Define API endpoints for managing sales data, including statistics and adding sales records."
+}</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>{
+  "description": "sales",
+  "endpoints": {
+    "statistics": {
+      "when": [
+        {
+          "method": "GET",
+          "response": {
+            "status": 200,
+            "body": {"Q1 total": 100, "Q2 total": 200},
+            "headers": {"content-type": "application/json"}
+          },
+          "delay": 0
+        },
+        {
+          "method": "PUT",
+          "request": {
+            "body": {"type": "object"}
+          },
+          "response": {
+            "status": 200,
+            "body": "Statistics updated successfully",
+            "headers": {"content-type": "text/plain"}
+          },
+          "delay": 0
+        }
+      ]
+    },
+    "add/sale": {
+      "when": [
+        {
+          "method": "POST",
+          "request": {
+            "body": {"type": "object"}
+          },
+          "response": {
+            "status": 201,
+            "body": "Sale record added successfully",
+            "headers": {"content-type": "text/plain"}
+          },
+          "delay": 0
+        }
+      ]
+    }
+  }
+}</code></pre>
+      
+      <h4>Example Response (400)</h4>
+      <pre><code>{
+  "error": "Invalid configuration received from LLM."
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- Mock Configuration Format -->
+  <div class="endpoint" id="mock-configuration-format">
+    <h3>Mock Configuration Format</h3>
     <p>The mock configurations should be stored in JSON files with the following structure:</p>
     <pre><code>{
   "description": "Project description",
@@ -60,29 +332,117 @@
           },
           "body": {"optional": "json body"}
         },
-        "delay": 1000,
         "response": {
           "status": 200,
           "body": {"example": "response content"},
           "headers": {
             "Content-Type": "application/json"
           }
-        }
+        },
+        "delay": 1000
       }]
     }
   }
 }</code></pre>
-
-    <h4>Example Usage</h4>
-    <p><code>GET /projects/my-project/api/users</code></p>
-    <p>This will look for a mock configuration in my-project's config file matching the path "/api/users" with GET method.</p>
-
-    <h4>Response</h4>
+    
+    <h4>Key Components</h4>
     <ul>
-      <li>Returns the configured mock response if found</li>
-      <li>Returns 400 if project doesn't exist</li>
-      <li>Returns 400 "Not implemented" if no matching endpoint configuration</li>
+      <li><code>description</code>: Project description/name</li>
+      <li><code>endpoints</code>: Map of endpoint paths to their configurations</li>
+      <li><code>when</code>: List of conditions and responses</li>
+      <li><code>method</code>: HTTP method (GET, POST, PUT)</li>
+      <li><code>request</code>: Matching criteria for queries, headers, and body</li>
+      <li><code>response</code>: Mock response configuration</li>
+      <li><code>delay</code>: Response delay in milliseconds</li>
     </ul>
+    
+    <h4>Query Operators</h4>
+    <ul>
+      <li><code>is</code>: Exact match</li>
+      <li><code>is!</code>: Not equal</li>
+      <li><code>contains</code>: Contains substring</li>
+      <li><code>contains!</code>: Does not contain substring</li>
+    </ul>
+    
+    <h4>Example Configuration</h4>
+    <pre><code>{
+  "description": "sales",
+  "endpoints": {
+    "statistics": {
+      "when": [
+        {
+          "method": "GET",
+          "response": {
+            "status": 200,
+            "body": {"Q1 total": 100, "Q2 total": 200},
+            "headers": {"content-type": "application/json"}
+          },
+          "delay": 0
+        },
+        {
+          "method": "PUT",
+          "request": {
+            "body": {"type": "object"}
+          },
+          "response": {
+            "status": 200,
+            "body": "Statistics updated successfully",
+            "headers": {"content-type": "text/plain"}
+          },
+          "delay": 0
+        }
+      ]
+    },
+    "add/sale": {
+      "when": [
+        {
+          "method": "POST",
+          "request": {
+            "body": {"type": "object"}
+          },
+          "response": {
+            "status": 201,
+            "body": "Sale record added successfully",
+            "headers": {"content-type": "text/plain"}
+          },
+          "delay": 0
+        }
+      ]
+    }
+  }
+}</code></pre>
+  </div>
+
+  <!-- GET /api-doc -->
+  <div class="endpoint">
+    <h3>GET /api-doc</h3>
+    <p>Returns this API documentation page.</p>
+    
+    <div class="example">
+      <h4>Example Request</h4>
+      <pre><code>GET http://localhost:8001/api-doc</code></pre>
+      
+      <h4>Example Response (200)</h4>
+      <pre><code>[HTML content of the documentation page]</code></pre>
+    </div>
+  </div>
+
+  <!-- Additional Resources -->
+  <div class="endpoint">
+    <h3>Additional Resources</h3>
+    <p>For more detailed information on the project's architecture and codebase, refer to the following files:</p>
+    <ul>
+      <li><code>src/schema.rs</code>: Defines the data structures for project configurations.</li>
+      <li><code>src/handlers.rs</code>: Contains the handler functions for each API endpoint.</li>
+      <li><code>src/llm.rs</code>: Manages interactions with the Language Model for generating configurations.</li>
+      <li><code>src/cache.rs</code>: Implements caching mechanisms for project configurations.</li>
+    </ul>
+  </div>
+  
+  <!-- Contact Information -->
+  <div class="endpoint">
+    <h3>Contact</h3>
+    <p>If you encounter any issues or have questions, please open an issue on the project's <a href="https://github.com/algorithmx/mockapi/issues">GitHub repository</a>.</p>
   </div>
 </body>
 </html>

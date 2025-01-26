@@ -158,7 +158,7 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
 
         let timer = Instant::now();
 
-        // Try to get config from cache first
+        // Try to get config from cache first, 3us
         let project_config = match cache::get_cached_config(project_name) {
             Some(config) => config,
             None => {
@@ -173,24 +173,24 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
             }
         };
 
-        let elapsed0 = timer.elapsed();
-        println!("Time taken to load config: {:?}", elapsed0);
+        // let elapsed0 = timer.elapsed();
+        // println!("Time taken to load config: {:?}", elapsed0);
 
         if let Some(endpoint) = project_config.endpoints.get(path) {
             
             let elapsedx = timer.elapsed();
-            println!(">>> Time taken to get_mut: {:?}", elapsedx);
+            println!("[1] Time taken to get: {:?}", elapsedx);
 
             // Try exact match first
             let key = create_endpoint_key(&method, &request.queries, &request.body);
             
-            // let elapsed = timer.elapsed();
-            // println!("Time taken to create endpoint key: {:?}", elapsed);
+            let elapsed = timer.elapsed();
+            println!("[2] Time taken to create endpoint key: {:?}", elapsed);
 
             // Try to find exact match in condition_map
             if let Some((response, delay)) = endpoint.condition_map.get(&key) {
-                // let elapsed1 = timer.elapsed();
-                // println!("Time taken to find exact match: {:?}", elapsed1);
+                let elapsed1 = timer.elapsed();
+                println!("[3] Time taken to find exact match: {:?}", elapsed1);
 
                 if *delay > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(*delay));
@@ -200,8 +200,8 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
                     .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
                     .unwrap_or("null".to_string());
 
-                // let elapsed2 = timer.elapsed();
-                // println!("Time taken to return response: {:?}", elapsed2);
+                let elapsed2 = timer.elapsed();
+                println!("[4] Time taken to return response: {:?}", elapsed2);
     
                 return Response {
                     status: response.status,

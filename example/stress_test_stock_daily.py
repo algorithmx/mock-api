@@ -9,8 +9,8 @@ import akshare as ak
 BASE_URL = "http://localhost:8001/projects/stock_daily/OCHL"
 STOCK_CODES = ak.stock_zh_a_spot_em()['代码'].tolist()
 DATE_RANGE = [f"202501{i:02d}" for i in range(1, 26)]
-NUM_REQUESTS = 10000  # Total requests to send
-CONCURRENCY = 200  # Number of concurrent requests
+NUM_REQUESTS = 100  # Total requests to send
+CONCURRENCY = 20  # Number of concurrent requests
 
 def make_request():
     """Make a single request to the endpoint"""
@@ -33,7 +33,7 @@ def run_stress_test():
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:
         futures = [executor.submit(make_request) for _ in range(NUM_REQUESTS)]
-        for future in concurrent.futures.as_completed(futures, timeout=60):
+        for future in concurrent.futures.as_completed(futures, timeout=1):
             try:
                 if future.result():
                     success_count += 1

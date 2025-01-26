@@ -73,9 +73,16 @@ at port 8001 on localhost.
 
 To start off, you can check out the API documentation 
 at endpoint  
-`http://localhost:8001/api-doc` for help. 
-The remaining part of this section is basically  
-the same as the content in the api-doc page.
+`http://localhost:8001/api-doc`, or directly open the file [api-doc.html](src/api-doc.html) for help.
+
+The API mock server provides the following endpoints:
+
+1. **GET /projects/:name** - Retrieve a project's configuration
+2. **POST /projects/:name** - Create a new project configuration
+3. **PUT /projects/:name** - Update an existing project configuration
+4. **GET /projects/:project_name/:path** - Mock an API endpoint based on project configuration
+5. **POST /llm/:name** - Generate a project configuration using a Language Model (LLM)
+6. **GET /api-doc** - Returns the API documentation page
 
 ---
 
@@ -92,7 +99,7 @@ from natural language.
 
 5. Performance optimization
 
-6. Rewrote the regex for the endpoint with query string and redesign the logic behind the `mock_request`
+6. Rewrote the regex for the endpoint with query string and redesigned the logic behind the `mock_request`
 
 7. Remove the code for thread pool and use `tikio` to handle concurrent requests.
 

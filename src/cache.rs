@@ -37,17 +37,12 @@ pub fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, Stri
     let mut config: ProjectConfig = serde_json::from_str(&content)
         .map_err(|e| format!("Invalid project configuration format: {}", e))?;
 
-    let timer = std::time::Instant::now();
-
     // Build condition map for each endpoint
     for endpoint in config.endpoints.values_mut() {
         if endpoint.condition_map.is_empty() {
             endpoint.build_condition_map();
         }
     }
-
-    let elapsedy = timer.elapsed();
-    println!("*** Time taken to build condition map: {:?}", elapsedy);
 
     // Cache the config and return the Arc 
     let config_arc = Arc::new(config);

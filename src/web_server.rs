@@ -210,7 +210,6 @@ impl ConnectionHandler {
   }
 
   fn dispatch_request(&self, request: Request) -> (u16, String, String) {
-    println!("|-- dispatching request");
     for listener in self.listeners.iter() {
       if let Some(parsed_path) = 
         helpers::parse_request_path(
