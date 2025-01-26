@@ -1,7 +1,9 @@
-use crate::{helpers::{self, get_project_config_file_path}, llm::compose_config, schema, web_server};
+use crate::{helpers::{self, get_project_config_file_path}, llm::compose_config, schema::{self, EndpointKey, QueryParam}, web_server::{self, types::Method}};
 use serde_json::Value;
 use std::{collections::HashMap, fs, fs::read_to_string};
 use web_server::types::{Nested, Request, Response};
+use crate::cache;
+use std::time::Instant;
 
 
 pub fn get_config() -> impl Fn(Request) -> Response {
@@ -30,13 +32,13 @@ pub fn save_config() -> impl Fn(Request) -> Response {
   |request: Request| {
     let file_path = helpers::config_file_path_from_request(&request);
 
-    if request.method == "POST" {
+    if request.method == Method::Post {
       let mut body = Nested::new();
       if file_path.exists() {
         body.insert_string("error".to_string(), "Project already exists.".to_string());
         return Response::json(400, body, None);
       }
-    } else if request.method == "PUT" && !file_path.exists() {
+    } else if request.method == Method::Put && !file_path.exists() {
       let mut body = Nested::new();
       body.insert_string("error".to_string(), "Project does not exist.".to_string());
       return Response::json(400, body, None);
@@ -47,6 +49,8 @@ pub fn save_config() -> impl Fn(Request) -> Response {
     // if content is an empty string, return
     match fs::write(file_path, content) {
         Ok(_) => {
+            // Invalidate cache when config is updated
+            cache::invalidate_cache(&request.params["name"]);
             let mut body = Nested::new();
             body.insert_string("result".to_string(), "ok".to_string());
             Response::json(200, body, None)
@@ -126,72 +130,110 @@ pub fn build_config_with_llm() -> impl Fn(Request) -> Response {
 }
 
 
+/// Creates an EndpointKey from a request's method, queries, and body
+fn create_endpoint_key(
+    method: &Method,
+    request_queries: &HashMap<String, String>,
+    request_body: &str,
+) -> EndpointKey {
+    let queries = (!request_queries.is_empty()).then(|| {
+        request_queries.iter().map(|(k, v)| {
+            (k.clone(), QueryParam {operator: "is".into(), value: v.clone()})
+        }).collect()
+    });
+
+    let body = match request_body.is_empty() {
+        true => None,
+        false => serde_json::from_str(request_body).ok()
+    };
+
+    EndpointKey { method: method.to_string().to_uppercase(), queries, body }
+}
 
 pub fn mock_request() -> impl Fn(Request) -> Response {
     |request: Request| {
-        // Get project config file path
-        let config_path = 
-            helpers::get_project_config_file_path(request.matches.get(0).unwrap());
-        
-        // Check if project exists
-        if !config_path.exists() {
-            let mut body = Nested::new();
-            body.insert_string("error".to_string(), "Project does not exist.".to_string());
-            return Response::json(400, body, None);
-        }
-
-        // Parse project configuration
-        let config_str = match read_to_string(config_path) {
-            Ok(content) => content,
-            Err(e) => return Response {
-                status: 400,
-                body: format!("Invalid project configuration file: {}", e),
-                headers: HashMap::new(),
-            },
-        };
-
-        let project_config: schema::ProjectConfig = match serde_json::from_str(&config_str) {
-            Ok(config) => config,
-            Err(e) => return Response {
-                status: 400,
-                body: format!("Invalid project configuration format: {}", e),
-                headers: HashMap::new(),
-            },
-        };
-
+        let project_name = request.matches.get(0).unwrap();
         let path = request.matches.get(1).unwrap();
-        let method = request.method.to_uppercase();
+        let method = request.method.clone();
 
-        println!("|-- path: {:?}", path);
-        println!("|-- method: {:?}", method);
+        let timer = Instant::now();
 
-        // Find matching endpoint and condition
+        // Try to get config from cache first
+        let project_config = match cache::get_cached_config(project_name) {
+            Some(config) => config,
+            None => {
+                match cache::load_file_to_cache(project_name) {
+                    Ok(config) => config,
+                    Err(e) => return Response {
+                        status: 400,
+                        body: e,
+                        headers: HashMap::new(),
+                    },
+                }
+            }
+        };
+
+        let elapsed0 = timer.elapsed();
+        println!("Time taken to load config: {:?}", elapsed0);
+
         if let Some(endpoint) = project_config.endpoints.get(path) {
-            for condition in &endpoint.when {
-                if condition.method.to_uppercase() == method {
-                    // Make query/header/body checks optional based on whether they're specified
-                    if check_condition(&request, condition, true) { // Pass strictness flag
-                        // Apply configured delay
-                        if condition.delay > 0 {
-                            std::thread::sleep(std::time::Duration::from_millis(condition.delay));
-                        }
-                        // Convert response body to string, handling null properly
-                        let body = condition.response.body
-                            .as_ref()
-                            .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
-                            .unwrap_or("null".to_string());
+            
+            let elapsedx = timer.elapsed();
+            println!(">>> Time taken to get_mut: {:?}", elapsedx);
 
-                        return Response {
-                            status: condition.response.status,
-                            body,
-                            headers: condition.response.headers.clone(),
-                        };
+            // Try exact match first
+            let key = create_endpoint_key(&method, &request.queries, &request.body);
+            
+            // let elapsed = timer.elapsed();
+            // println!("Time taken to create endpoint key: {:?}", elapsed);
+
+            // Try to find exact match in condition_map
+            if let Some((response, delay)) = endpoint.condition_map.get(&key) {
+                // let elapsed1 = timer.elapsed();
+                // println!("Time taken to find exact match: {:?}", elapsed1);
+
+                if *delay > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(*delay));
+                }
+                let body = response.body
+                    .as_ref()
+                    .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
+                    .unwrap_or("null".to_string());
+
+                // let elapsed2 = timer.elapsed();
+                // println!("Time taken to return response: {:?}", elapsed2);
+    
+                return Response {
+                    status: response.status,
+                    body,
+                    headers: response.headers.clone(),
+                };
+            }
+
+            // Fallback to sequential check if no exact match found
+            for condition in &endpoint.conditions {
+                if condition.method.to_uppercase() != method.clone().to_string().to_uppercase() {
+                    continue;
+                }
+                if check_condition(&request, condition, true) {
+                    if condition.delay > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(condition.delay));
                     }
+                    let body = condition.response.body
+                        .as_ref()
+                        .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
+                        .unwrap_or("null".to_string());
+
+                    return Response {
+                        status: condition.response.status,
+                        body,
+                        headers: condition.response.headers.clone(),
+                    };
                 }
             }
         }
 
-        // No matching endpoint found
+        // No matching endpoint or condition found
         Response {
             status: 406,
             body: "Not implemented.".to_string(),
@@ -345,9 +387,9 @@ mod tests {
         test_dir
     }
 
-    fn create_test_request(method: &str, path: &str, body: Option<String>) -> Request {
+    fn create_test_request(method: &Method, path: &str, body: Option<String>) -> Request {
         Request {
-            method: method.to_string(),
+            method: method.clone(),
             path: path.to_string(),
             version: "1.1".to_string(),
             headers: HashMap::new(),
@@ -364,7 +406,7 @@ mod tests {
         let project_path = test_dir.path().join("projects").join("test.json");
         fs::write(&project_path, r#"{"test": "data"}"#).unwrap();
 
-        let mut request = create_test_request("GET", "/projects/test", None);
+        let mut request = create_test_request(&Method::Get, "/projects/test", None);
         request.params.insert("name".to_string(), "test".to_string());
 
         // Set environment variable for test
@@ -380,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_get_config_nonexistent_file() {
-        let mut request = create_test_request("GET", "/projects/nonexistent", None);
+        let mut request = create_test_request(&Method::Get, "/projects/nonexistent", None);
         request.params.insert("name".to_string(), "nonexistent".to_string());
         let handler = get_config();
         let response = handler(request);
@@ -394,7 +436,7 @@ mod tests {
         let test_dir = setup_test_dir();
         let config_data = r#"{"test": "data"}"#;
 
-        let mut request = create_test_request("POST", "/projects/test", Some(config_data.to_string()));
+        let mut request = create_test_request(&Method::Post, "/projects/test", Some(config_data.to_string()));
         request.params.insert("name".to_string(), "test".to_string());
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -417,7 +459,7 @@ mod tests {
         let project_path = test_dir.path().join("projects").join("test.json");
         fs::write(&project_path, r#"{"existing": "data"}"#).unwrap();
 
-        let mut request = create_test_request("POST", "/projects/test", Some(r#"{"new": "data"}"#.to_string()));
+        let mut request = create_test_request(&Method::Post, "/projects/test", Some(r#"{"new": "data"}"#.to_string()));
         request.params.insert("name".to_string(), "test".to_string());
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -434,7 +476,7 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path();
 
-        let mut request = create_test_request("PUT", "/projects/test", Some(r#"{"new": "data"}"#.to_string()));
+        let mut request = create_test_request(&Method::Put, "/projects/test", Some(r#"{"new": "data"}"#.to_string()));
         request.params.insert("name".to_string(), path.to_str().unwrap().to_string());
 
         let handler = save_config();
@@ -451,7 +493,7 @@ mod tests {
         fs::write(&project_path, r#"{"existing": "data"}"#).unwrap();
 
         let new_data = r#"{"new": "data"}"#;
-        let mut request = create_test_request("PUT", "/projects/test", Some(new_data.to_string()));
+        let mut request = create_test_request(&Method::Put, "/projects/test", Some(new_data.to_string()));
         request.params.insert("name".to_string(), "test".to_string());
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -468,7 +510,7 @@ mod tests {
     fn test_mock_request_project_not_found() {
         let test_dir = setup_test_dir();
         
-        let mut request = create_test_request("GET", "/projects/nonexistent/api/test", None);
+        let mut request = create_test_request(&Method::Get, "/projects/nonexistent/api/test", None);
         request.matches = vec!["nonexistent".to_string(), "api/test".to_string()];
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -486,7 +528,7 @@ mod tests {
         let project_path = test_dir.path().join("projects").join("test.json");
         fs::write(&project_path, "invalid json").unwrap();
 
-        let mut request = create_test_request("GET", "/projects/test/api/test", None);
+        let mut request = create_test_request(&Method::Get, "/projects/test/api/test", None);
         request.matches = vec!["test".to_string(), "api/test".to_string()];
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -504,7 +546,7 @@ mod tests {
         let project_path = test_dir.path().join("projects").join("test.json");
         fs::write(&project_path, r#"{"description": "test", "endpoints": {}}"#).unwrap();
 
-        let mut request = create_test_request("GET", "/projects/test/api/test", None);
+        let mut request = create_test_request(&Method::Get, "/projects/test/api/test", None);
         request.matches = vec!["test".to_string(), "api/test".to_string()];
 
         temp_env::with_var("MOCK_SERVER_DB_ROOT", Some(test_dir.path().to_str().unwrap()), || {
@@ -533,7 +575,7 @@ mod tests {
             delay: 0,
         };
 
-        let request = create_test_request("GET", "/test", None);
+        let request = create_test_request(&Method::Get, "/test", None);
         assert!(check_condition(&request, &condition, true));
     }
 

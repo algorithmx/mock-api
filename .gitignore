@@ -2,3 +2,8 @@
 /database
 projects
 Cargo.lock
+.json
+.csv
+example/Pipfile.lock
+example/*.json
+example/*.csv
