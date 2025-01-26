@@ -111,12 +111,7 @@ from natural language.
 
 ## TODO
 
-The request processing time before dispatching, plus
-the reaponse sending time after the mock result is ready,
-takes more that 1ms. 
-This is not acceptable on a local machine. 
-Further optimization efforts needed on this issue. 
-
+More stress tests.
 
 ---
 
