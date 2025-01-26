@@ -92,7 +92,6 @@ pub struct ResponseConfig {
 // Custom serialization/deserialization for Endpoint to build the HashMap
 impl Endpoint {
     pub fn build_condition_map(&mut self) {
-        println!("\x1b[31mBuilding condition map\x1b[0m");
         self.condition_map = self.conditions.iter().map(|condition| {
             let key = EndpointKey {
                 method: condition.method.clone(),
@@ -102,7 +101,6 @@ impl Endpoint {
             let value = (condition.response.clone(), condition.delay);
             (key, value)
         }).collect();
-        println!("\x1b[34mCondition map contains {} items\x1b[0m", self.condition_map.len());
     }
 }
 

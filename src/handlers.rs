@@ -150,48 +150,32 @@ fn create_endpoint_key(
     EndpointKey { method: method.to_string().to_uppercase(), queries, body }
 }
 
+
+
 pub fn mock_request() -> impl Fn(Request) -> Response {
     |request: Request| {
         let project_name = request.matches.get(0).unwrap();
         let path = request.matches.get(1).unwrap();
         let method = request.method.clone();
 
-        let timer = Instant::now();
-
         // Try to get config from cache first, 3us
-        let project_config = match cache::get_cached_config(project_name) {
-            Some(config) => config,
-            None => {
-                match cache::load_file_to_cache(project_name) {
-                    Ok(config) => config,
-                    Err(e) => return Response {
-                        status: 400,
-                        body: e,
-                        headers: HashMap::new(),
-                    },
-                }
-            }
-        };
-
-        // let elapsed0 = timer.elapsed();
-        // println!("Time taken to load config: {:?}", elapsed0);
+        let project_config = 
+            match cache::get_or_else_load_cached_config(project_name) {
+                Ok(config) => config,
+                Err(e) => return Response {
+                    status: 400,
+                    body: e,
+                    headers: HashMap::new(),
+                },
+            };
 
         if let Some(endpoint) = project_config.endpoints.get(path) {
             
-            let elapsedx = timer.elapsed();
-            println!("[1] Time taken to get: {:?}", elapsedx);
-
             // Try exact match first
             let key = create_endpoint_key(&method, &request.queries, &request.body);
             
-            let elapsed = timer.elapsed();
-            println!("[2] Time taken to create endpoint key: {:?}", elapsed);
-
             // Try to find exact match in condition_map
             if let Some((response, delay)) = endpoint.condition_map.get(&key) {
-                let elapsed1 = timer.elapsed();
-                println!("[3] Time taken to find exact match: {:?}", elapsed1);
-
                 if *delay > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(*delay));
                 }
@@ -200,9 +184,6 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
                     .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
                     .unwrap_or("null".to_string());
 
-                let elapsed2 = timer.elapsed();
-                println!("[4] Time taken to return response: {:?}", elapsed2);
-    
                 return Response {
                     status: response.status,
                     body,

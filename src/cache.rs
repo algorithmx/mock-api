@@ -11,10 +11,11 @@ lazy_static! {
         RwLock::new(HashMap::new());
 }
 
-pub fn get_cached_config(project_name: &str) -> Option<Arc<ProjectConfig>> {
+fn get_cached_config(project_name: &str) -> Option<Arc<ProjectConfig>> {
     let cache = PROJECT_CACHE.read().unwrap();
     cache.get(project_name).cloned()
 }
+
 
 pub fn cache_config(project_name: String, config: ProjectConfig) {
     let mut cache = PROJECT_CACHE.write().unwrap();
@@ -26,7 +27,7 @@ pub fn invalidate_cache(project_name: &str) {
     cache.remove(project_name);
 }
 
-pub fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, String> {
+fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, String> {
     let config_path = helpers::get_project_config_file_path(project_name);
     if !config_path.exists() {
         return Err("Project does not exist.".to_string());
@@ -49,3 +50,15 @@ pub fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, Stri
     cache_config(project_name.to_string(), (*config_arc).clone());
     Ok(config_arc)
 } 
+
+pub fn get_or_else_load_cached_config(project_name: &str) -> Result<Arc<ProjectConfig>, String> {
+    match get_cached_config(project_name) {
+        Some(config) => Ok(config),
+        None => {
+            match load_file_to_cache(project_name) {
+                Ok(config) => Ok(config),
+                Err(e) => Err(e),
+            }
+        }
+    }
+}
