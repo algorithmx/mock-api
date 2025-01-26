@@ -41,7 +41,7 @@ fn main() {
     server.post("/llm/:name", handlers::build_config_with_llm());
 
     // DO NOT MODIFY THIS STRING r !!!
-    let r = r"^/projects/(\w+)(/\w+)+(\?(\w+=\w+)(&\w+=\w+)*)?$"; 
+    let r = r"^/projects/(\w+)((/\w+)+)(\?(\w+=\w+)(&\w+=\w+)*)?$"; 
     // explain: 
     // 1. /projects/ - matches the exact path
     // 2. (\w+) - matches the project name

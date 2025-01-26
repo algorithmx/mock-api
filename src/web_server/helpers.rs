@@ -126,12 +126,12 @@ fn construct_matches(regex: &Regex, full_path: &str) -> Option<Vec<String>> {
 fn handle_regex_path(pattern: &str, full_path: &str, path: &str, queries: &HashMap<String, String>) -> Option<RequestPath> {
     // from main.rs
     // currently we only support one level of API path
-    // let r = r"^/projects/(\w+)(/\w+)+(\?(\w+=\w+)(&\w+=\w+)*)?$";  // <-- pattern
+    // let r = r"^/projects/(\w+)((/\w+)+)(\?(\w+=\w+)(&\w+=\w+)*)?$";  // <-- pattern
     // explain: 
     // 1. /projects/ - matches the exact path
     // 2. (\w+) - matches the project name (matches[0])
     // 3. (/\w+)+ - matches the API path (with starting slash, e.g. "/api/v1") (matches[1])
-    // 4. (\?(\w+=\w+)(&\w+=\w+)*)? - matches the queries (matches[2])
+    // 4. (\?(\w+=\w+)(&\w+=\w+)*)? - matches the queries (matches[3])
     let regexp = Regex::new(pattern).ok()?;
     let matches = construct_matches(&regexp, full_path)?;
     Some(RequestPath {
