@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::{collections::HashMap, fs, fs::read_to_string};
 use web_server::types::{Nested, Request, Response};
 use crate::cache;
-use std::time::Instant;
 
 
 pub fn get_config() -> impl Fn(Request) -> Response {
