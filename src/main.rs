@@ -62,6 +62,9 @@ fn main() {
       Response::html(html.to_string())
     });
 
+    server.get("/hello", |_| {
+        Response::ok("hello".to_string(), None)
+    });
 
     server.listen(server_addr);
 
