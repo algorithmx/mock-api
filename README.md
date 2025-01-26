@@ -28,9 +28,12 @@ The API mock server is optimized to be
 responsive and it can survive modest amount 
 of concurrent incoming requests.
 
-This is my first serious Rust project. 
+This is my first serious Rust project. Please open issues on whatever reproducible problems you have ever 
+encountered. 
 
-## Usage
+---
+
+## Setup and launch
 
 ### Compile and test
 
@@ -59,8 +62,22 @@ $ mkdir -p projects
 $ export MOCK_SERVER_PORT=8001 && export RUST_BACKTRACE=1 && export MOCK_SERVER_DB_ROOT=`pwd` && cargo build && cargo run
 ```
 
-Please open issues on whatever reproducible problems you have ever 
-encountered. 
+
+---
+
+## Using the API mock server
+
+The following instructions assumes that the 
+API mock server is successfully launched 
+at port 8001 on localhost. 
+
+To start off, you can check out the API documentation 
+at endpoint  
+`http://localhost:8001/api-doc` for help. 
+The remaining part of this section is basically  
+the same as the content in the api-doc page.
+
+---
 
 ## Main contributions from Yunlong
 
