@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Create New Project</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+  <!-- Also include grids for multi-column layout -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    .endpoint,
+    .condition,
+    .headerRow,
+    .queryRow,
+    .requestBlock {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    .removeBtn {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    .smallBtn {
+      padding: 4px 8px;
+      font-size: 90%;
+      margin-left: 5px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    pre {
+      background: #f8f8f8;
+      padding: 10px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      max-height: 300px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Create New Project</h1>
+    <p>
+      Use the form below to create a new project configuration following the
+      <a href="/api-doc#mock-configuration-format" target="_blank">Configuration Grammar</a>.
+    </p>
+    <form id="configForm" class="pure-form pure-form-stacked">
+      <label for="description">Project Name:</label>
+      <input type="text" id="description" name="description" value="" required class="pure-input-1">
+
+      <div id="endpointsContainer">
+        <h2>Endpoints</h2>
+        <!-- Endpoints will be dynamically added here -->
+      </div>
+      <button type="button" onclick="addEndpoint()" class="pure-button pure-button-primary">Add Endpoint</button>
+
+      <br>
+      <button type="button" id="submitBtn" onclick="submitConfig()" class="pure-button pure-button-primary" disabled>Create Project</button>
+      <br>
+      <button type="button" onclick="previewConfig()" class="pure-button pure-button-primary">Preview
+        Configuration</button>
+      <pre id="configPreview"></pre>
+    </form>
+    <p id="responseMsg"></p>
+  </div>
+
+  <script>
+    // Helper function: create an element with attributes and innerHTML
+    function createEl(tag, attributes = {}, innerHTML = "") {
+      const el = document.createElement(tag);
+      for (let key in attributes) {
+        if (key === "class") el.className = attributes[key];
+        else el.setAttribute(key, attributes[key]);
+      }
+      el.innerHTML = innerHTML;
+      return el;
+    }
+
+    // Add a new endpoint block to the form
+    function addEndpoint() {
+      const endpointsContainer = document.getElementById('endpointsContainer');
+
+      const endpointDiv = createEl('div', { class: 'endpoint' });
+
+      // Header with remove button for endpoint
+      const endpointHeader = createEl('div');
+      const endpointLabel = createEl('label', {}, "Endpoint Path:");
+      const removeEndpointBtn = createEl('button', { type: "button", class: "removeBtn pure-button smallBtn" }, "Remove Endpoint");
+      removeEndpointBtn.onclick = () => {
+        endpointDiv.remove();
+        checkSubmitButton();
+      };
+      endpointHeader.appendChild(endpointLabel);
+      endpointHeader.appendChild(removeEndpointBtn);
+
+      // Input for endpoint path
+      const endpointPath = createEl('input', { type: 'text', placeholder: '/example', required: true, class: 'pure-input-1' });
+      // When the endpoint value changes, re‑check
+      endpointPath.addEventListener('input', checkSubmitButton);
+
+      endpointDiv.appendChild(endpointHeader);
+      endpointDiv.appendChild(endpointPath);
+
+      // Container for conditions
+      const conditionsContainer = createEl('div', { class: 'conditionsContainer' });
+      endpointDiv.appendChild(conditionsContainer);
+
+      // Button to add a condition to this endpoint
+      const addConditionBtn = createEl('button', { type: "button", class: "pure-button" }, "Add Condition");
+      addConditionBtn.onclick = () => addCondition(conditionsContainer);
+      endpointDiv.appendChild(addConditionBtn);
+
+      // Add an initial condition by default
+      addCondition(conditionsContainer);
+
+      endpointsContainer.appendChild(endpointDiv);
+      // Re-check the submit button state whenever an endpoint is added
+      checkSubmitButton();
+    }
+
+    // Add a new condition block into an endpoint
+    function addCondition(conditionsContainer) {
+      const conditionDiv = createEl('div', { class: 'condition' });
+
+      // Remove condition button
+      const removeConditionBtn = createEl('button', { type: "button", class: "removeBtn pure-button smallBtn" }, "Remove Condition");
+      removeConditionBtn.onclick = () => {
+        conditionDiv.remove();
+        checkSubmitButton();
+      };
+      conditionDiv.appendChild(removeConditionBtn);
+
+      // Group HTTP Method and Delay on one row using PureCSS grid
+      const methodDelayRow = createEl('div', { class: 'pure-g' });
+
+      // HTTP Method field in first half
+      const methodDiv = createEl('div', { class: 'pure-u-1-2' });
+      methodDiv.appendChild(createEl('label', {}, "HTTP Method:"));
+      const methodSelect = createEl('select', { class: 'pure-input-1' });
+      ["GET", "POST", "PUT", "DELETE", "PATCH"].forEach(method => {
+        const option = createEl('option', { value: method }, method);
+        methodSelect.appendChild(option);
+      });
+      // Re-check when the method changes
+      methodSelect.addEventListener('change', checkSubmitButton);
+      methodDiv.appendChild(methodSelect);
+      methodDelayRow.appendChild(methodDiv);
+
+      // Delay field in second half
+      const delayDiv = createEl('div', { class: 'pure-u-1-2' });
+      delayDiv.appendChild(createEl('label', {}, "Delay (ms):"));
+      const delayInput = createEl('input', { type: 'number', value: 0, min: 0, class: 'pure-input-1' });
+      // Re-check when delay changes (if needed)
+      delayInput.addEventListener('input', checkSubmitButton);
+      delayDiv.appendChild(delayInput);
+      methodDelayRow.appendChild(delayDiv);
+
+      conditionDiv.appendChild(methodDelayRow);
+
+      // Response block
+      const responseBlock = createEl('div', { class: 'responseBlock' });
+      responseBlock.appendChild(createEl('h4', {}, "Response"));
+
+      // Status input
+      responseBlock.appendChild(createEl('label', {}, "Status:"));
+      const statusInput = createEl('input', { type: 'number', value: 200, required: true, class: 'pure-input-1' });
+      statusInput.addEventListener('input', checkSubmitButton);
+      responseBlock.appendChild(statusInput);
+
+      // Response Headers container and add button
+      const headersContainer = createEl('div', { class: 'headersContainer' });
+      headersContainer.appendChild(createEl('p', {}, "Response Headers:"));
+      const addHeaderBtn = createEl('button', { type: "button", class: "pure-button" }, "Add Header");
+      addHeaderBtn.onclick = () => addHeader(headersContainer);
+      responseBlock.appendChild(headersContainer);
+      responseBlock.appendChild(addHeaderBtn);
+
+      // Response Body textarea
+      responseBlock.appendChild(createEl('label', {}, "Response Body (JSON):"));
+      const bodyTextarea = createEl('textarea', { placeholder: "Optional JSON body", class: 'pure-input-1' });
+      bodyTextarea.addEventListener('input', checkSubmitButton);
+      responseBlock.appendChild(bodyTextarea);
+
+      conditionDiv.appendChild(responseBlock);
+
+      // Optional Request Criteria toggle
+      const requestToggleLabel = createEl('label', {}, "Include Request Criteria?");
+      const requestToggle = createEl('input', { type: 'checkbox' });
+      requestToggle.onchange = function () {
+        requestBlock.classList.toggle('hidden', !this.checked);
+        checkSubmitButton();
+      };
+      conditionDiv.appendChild(requestToggleLabel);
+      conditionDiv.appendChild(requestToggle);
+
+      // Request block (initially hidden)
+      const requestBlock = createEl('div', { class: 'requestBlock hidden' });
+      requestBlock.appendChild(createEl('h4', {}, "Request Criteria"));
+
+      // Request: Query Params container and add button
+      const queriesContainer = createEl('div', { class: 'queriesContainer' });
+      queriesContainer.appendChild(createEl('p', {}, "Query Params:"));
+      const addQueryBtn = createEl('button', { type: "button", class: "pure-button" }, "Add Query");
+      addQueryBtn.onclick = () => addQuery(queriesContainer);
+      requestBlock.appendChild(queriesContainer);
+      requestBlock.appendChild(addQueryBtn);
+
+      // Request: Headers container and add button
+      const reqHeadersContainer = createEl('div', { class: 'reqHeadersContainer' });
+      reqHeadersContainer.appendChild(createEl('p', {}, "Request Headers:"));
+      const addReqHeaderBtn = createEl('button', { type: "button", class: "pure-button" }, "Add Header");
+      addReqHeaderBtn.onclick = () => addHeader(reqHeadersContainer);
+      requestBlock.appendChild(reqHeadersContainer);
+      requestBlock.appendChild(addReqHeaderBtn);
+
+      // Request Body textarea
+      requestBlock.appendChild(createEl('label', {}, "Request Body (JSON):"));
+      const reqBodyTextarea = createEl('textarea', { placeholder: "Optional JSON for request body", class: 'pure-input-1' });
+      reqBodyTextarea.addEventListener('input', checkSubmitButton);
+      requestBlock.appendChild(reqBodyTextarea);
+
+      conditionDiv.appendChild(requestBlock);
+
+      conditionsContainer.appendChild(conditionDiv);
+      // In case removal of condition affects the config
+      checkSubmitButton();
+    }
+
+    // Add a header row for both Response Headers and Request Headers on a single row
+    function addHeader(container) {
+      const headerRow = createEl('div', { class: 'headerRow pure-g' });
+
+      const keyCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-3' });
+      const keyInput = createEl('input', { type: 'text', placeholder: "Header Name", required: true, class: 'pure-input-1' });
+      keyInput.addEventListener('input', checkSubmitButton);
+      keyCol.appendChild(keyInput);
+
+      const valueCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-3' });
+      const valueInput = createEl('input', { type: 'text', placeholder: "Header Value", required: true, class: 'pure-input-1' });
+      valueInput.addEventListener('input', checkSubmitButton);
+      valueCol.appendChild(valueInput);
+
+      const removeCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-3' });
+      const removeBtn = createEl('button', { type: "button", class: "removeBtn pure-button smallBtn" }, "Remove");
+      removeBtn.onclick = () => {
+        headerRow.remove();
+        checkSubmitButton();
+      };
+      removeCol.appendChild(removeBtn);
+
+      headerRow.appendChild(keyCol);
+      headerRow.appendChild(valueCol);
+      headerRow.appendChild(removeCol);
+
+      container.appendChild(headerRow);
+      checkSubmitButton();
+    }
+
+    // Add a query row for Request Criteria in a single row with three inputs and a remove button
+    function addQuery(container) {
+      const queryRow = createEl('div', { class: 'queryRow pure-g' });
+
+      const paramCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-4' });
+      const paramInput = createEl('input', { type: 'text', placeholder: "Query Parameter", class: 'pure-input-1' });
+      paramInput.addEventListener('input', checkSubmitButton);
+      paramCol.appendChild(paramInput);
+
+      const operatorCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-4' });
+      const operatorSelect = createEl('select', { class: 'pure-input-1' });
+      ["is", "is!", "contains", "contains!"].forEach(op => {
+        const option = createEl('option', { value: op }, op);
+        operatorSelect.appendChild(option);
+      });
+      operatorSelect.addEventListener('change', checkSubmitButton);
+      operatorCol.appendChild(operatorSelect);
+
+      const valueCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-4' });
+      const valueInput = createEl('input', { type: 'text', placeholder: "Value", class: 'pure-input-1' });
+      valueInput.addEventListener('input', checkSubmitButton);
+      valueCol.appendChild(valueInput);
+
+      const removeCol = createEl('div', { class: 'pure-u-1 pure-u-md-1-4' });
+      const removeBtn = createEl('button', { type: "button", class: "removeBtn pure-button smallBtn" }, "Remove");
+      removeBtn.onclick = () => {
+        queryRow.remove();
+        checkSubmitButton();
+      };
+      removeCol.appendChild(removeBtn);
+
+      queryRow.appendChild(paramCol);
+      queryRow.appendChild(operatorCol);
+      queryRow.appendChild(valueCol);
+      queryRow.appendChild(removeCol);
+
+      container.appendChild(queryRow);
+      checkSubmitButton();
+    }
+
+    // Function to collect form data and assemble the configuration JSON
+    function getConfig() {
+      const config = {
+        description: document.getElementById('description').value,
+        endpoints: {}
+      };
+
+      const endpointsContainer = document.getElementById('endpointsContainer');
+      const endpointDivs = endpointsContainer.getElementsByClassName('endpoint');
+      Array.from(endpointDivs).forEach(endpointDiv => {
+        const pathInput = endpointDiv.querySelector('input[type="text"]');
+        const path = pathInput.value.trim();
+        if (!path) { return; }
+
+        config.endpoints[path] = { when: [] };
+        const conditions = endpointDiv.querySelectorAll('.condition');
+
+        conditions.forEach(condition => {
+          // Get method and delay (grouped inside the grid row)
+          const row = condition.querySelector('.pure-g');
+          const method = row.querySelector('select').value;
+          const delay = parseInt(row.querySelector('input[type="number"]').value, 10) || 0;
+
+          // Process response section
+          const responseBlock = condition.querySelector('.responseBlock');
+          const status = parseInt(responseBlock.querySelector('input[type="number"]').value, 10) || 200;
+          // Collect headers from response
+          const headerRows = responseBlock.querySelectorAll('.headerRow');
+          const headers = {};
+          headerRows.forEach(row => {
+            const inputs = row.getElementsByTagName('input');
+            const key = inputs[0].value.trim();
+            const value = inputs[1].value.trim();
+            if (key) { headers[key] = value; }
+          });
+          let responseBodyRaw = responseBlock.querySelector('textarea').value.trim();
+          let responseBody;
+          if (responseBodyRaw) {
+            try {
+              responseBody = JSON.parse(responseBodyRaw);
+            } catch (e) {
+              responseBody = responseBodyRaw;
+            }
+          }
+
+          const conditionData = {
+            method: method,
+            delay: delay,
+            response: {
+              status: status,
+              headers: headers
+            }
+          };
+          if (responseBody !== undefined && responseBody !== "") {
+            conditionData.response.body = responseBody;
+          }
+
+          // Process optional request criteria if enabled
+          const requestToggle = condition.querySelector('input[type="checkbox"]');
+          if (requestToggle && requestToggle.checked) {
+            const requestBlock = condition.querySelector('.requestBlock');
+            const reqData = {};
+
+            // Queries
+            const queriesContainer = requestBlock.querySelector('.queriesContainer');
+            const queryRows = queriesContainer.querySelectorAll('.queryRow');
+            if (queryRows.length > 0) {
+              reqData.queries = {};
+              queryRows.forEach(row => {
+                const cols = row.getElementsByTagName('input');
+                const param = cols[0].value.trim();
+                const operator = row.querySelector('select').value;
+                const value = cols[1].value.trim();
+                // Only include query row if not both parameter and value are empty.
+                if (!(param === "" && value === "")) {
+                  reqData.queries[param] = {
+                    operator: operator,
+                    value: value
+                  };
+                }
+              });
+            }
+
+            // Request Headers
+            const reqHeadersContainer = requestBlock.querySelector('.reqHeadersContainer');
+            const reqHeaderRows = reqHeadersContainer.querySelectorAll('.headerRow');
+            if (reqHeaderRows.length > 0) {
+              reqData.headers = {};
+              reqHeaderRows.forEach(row => {
+                const inputs = row.getElementsByTagName('input');
+                const key = inputs[0].value.trim();
+                const value = inputs[1].value.trim();
+                if (key) { reqData.headers[key] = value; }
+              });
+            }
+
+            // Request Body
+            const reqBodyRaw = requestBlock.querySelector('textarea').value.trim();
+            if (reqBodyRaw) {
+              try {
+                reqData.body = JSON.parse(reqBodyRaw);
+              } catch (e) {
+                reqData.body = reqBodyRaw;
+              }
+            }
+
+            if (Object.keys(reqData).length > 0) {
+              conditionData.request = reqData;
+            }
+          }
+
+          config.endpoints[path].when.push(conditionData);
+        });
+      });
+
+      return config;
+    }
+
+    // Preview the configuration JSON
+    function previewConfig() {
+      const config = getConfig();
+      document.getElementById('configPreview').innerText = JSON.stringify(config, null, 2);
+    }
+
+    // Submit the assembled configuration JSON to the server
+    function submitConfig() {
+      const config = getConfig();
+      // replace the current path /create-project with /projects/:name
+      const submitPath = window.location.pathname.replace('/create-project', '/projects/' + config.description);
+      fetch(submitPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      })
+        .then(response => response.json().then(data => ({ status: response.status, data })))
+        .then(result => {
+          const msgElem = document.getElementById('responseMsg');
+          if (result.status === 200) {
+            msgElem.innerText = "Project created successfully. You may now refresh the page.";
+          } else {
+            msgElem.innerText = "Error: " + (result.data.error || "Unknown error.");
+          }
+        })
+        .catch(err => {
+          alert('Error submitting configuration: ' + err);
+        });
+    }
+
+    // New helper function to enable/disable the submit button depending on endpoints
+    function checkSubmitButton() {
+      const config = getConfig();
+      const submitBtn = document.getElementById("submitBtn");
+      // Enable the button only when there is at least one endpoint with a non-empty path.
+      const endpointsExist = Object.keys(config.endpoints).length > 0;
+      submitBtn.disabled = !endpointsExist;
+    }
+
+    // On page load, add an initial endpoint and attach event listeners for real-time validation
+    document.addEventListener("DOMContentLoaded", function () {
+      addEndpoint();
+      document.getElementById("configForm").addEventListener("input", checkSubmitButton);
+      document.getElementById("configForm").addEventListener("change", checkSubmitButton);
+    });
+  </script>
+</body>
+
+</html>

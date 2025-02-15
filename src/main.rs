@@ -66,6 +66,11 @@ fn main() {
         Response::ok("hello".to_string(), None)
     });
 
+    server.get("/create-project", |_| {
+        let html = include_str!("templates/new_project.html");
+        Response::html(html.to_string())
+    });
+
     server.listen(server_addr);
 
 
