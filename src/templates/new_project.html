@@ -418,7 +418,7 @@
               try {
                 reqData.body = JSON.parse(reqBodyRaw);
               } catch (e) {
-                reqData.body = reqBodyRaw;
+                alert("Error parsing request body: " + e);
               }
             }
 
