@@ -55,6 +55,13 @@ fn main() {
         method: Method::Get,
       },
     );
+    server.request(
+        handlers::mock_request(),
+        RequestOption {
+          path: web_server::types::RequestPathPattern::Match(r.to_string()),
+          method: Method::Post,
+        },
+    );
 
     // Add API documentation endpoint
     server.get("/api-doc", |_| {

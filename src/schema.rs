@@ -31,8 +31,9 @@ pub struct WhenCondition {
     /// HTTP method (GET, POST, PUT, etc.)
     pub method: String,
     /// Request matching criteria (queries, headers, body)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub request: Option<RequestConfig>,
+    // #[serde(default, skip_serializing_if = "Option::is_none")]
+    // pub request: Option<RequestConfig>,
+    pub request: RequestConfig,
     /// Response to return when request matches
     pub response: ResponseConfig,
     /// Optional delay in milliseconds before sending response
@@ -92,11 +93,11 @@ pub struct ResponseConfig {
 // Custom serialization/deserialization for Endpoint to build the HashMap
 impl Endpoint {
     pub fn build_condition_map(&mut self) {
-        self.condition_map = self.conditions.iter().map(|condition| {
+        self.condition_map = self.conditions.iter().map(|condition: &WhenCondition| {            
             let key = EndpointKey {
                 method: condition.method.clone(),
-                queries: condition.request.as_ref().and_then(|req| req.queries.clone()),
-                body: condition.request.as_ref().and_then(|req| req.body.clone()),
+                queries: condition.request.queries.clone(),
+                body: condition.request.body.clone(),
             };
             let value = (condition.response.clone(), condition.delay);
             (key, value)

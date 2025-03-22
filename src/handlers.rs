@@ -49,10 +49,20 @@ pub fn save_config() -> impl Fn(Request) -> Response {
     match fs::write(file_path, content) {
         Ok(_) => {
             // Invalidate cache when config is updated
-            cache::invalidate_cache(&request.params["name"]);
-            let mut body = Nested::new();
-            body.insert_string("result".to_string(), "ok".to_string());
-            Response::json(200, body, None)
+            // cache::invalidate_cache(&request.params["name"]);
+            let project_name = helpers::project_name_from_request(&request);
+            match cache::get_or_else_load_cached_config(&project_name) {
+                Ok(_) => {
+                    let mut body = Nested::new();
+                    body.insert_string("result".to_string(), "ok".to_string());
+                    return Response::json(200, body, None)
+                },
+                Err(e) => {
+                    let mut body = Nested::new();
+                    body.insert_string("error".to_string(), format!("Failed to save config: {}", e));
+                    return Response::json(500, body, None)
+                }
+            };
         }
         Err(e) => {
             eprintln!("Failed to write config: {}", e);
@@ -135,12 +145,16 @@ fn create_endpoint_key(
     request_queries: &HashMap<String, String>,
     request_body: &str,
 ) -> EndpointKey {
-    let queries = (!request_queries.is_empty()).then(|| {
-        request_queries.iter().map(|(k, v)| {
-            (k.clone(), QueryParam {operator: "is".into(), value: v.clone()})
-        }).collect()
-    });
-
+    let queries = (!request_queries.is_empty())
+        .then(|| {
+            request_queries.iter().map(|(k, v)| {
+                // Use "is" as the default operator to match the behavior in build_condition_map
+                // when no specific operator is provided in the configuration
+                (k.clone(), QueryParam {operator: "is".into(), value: v.clone()})
+            }).collect::<HashMap<String, QueryParam>>()
+        }).or_else(|| {
+            None
+        });
     let body = match request_body.is_empty() {
         true => None,
         false => serde_json::from_str(request_body).ok()
@@ -150,14 +164,14 @@ fn create_endpoint_key(
 }
 
 
-
+// Updated mock_request that uses the helper function to avoid code repetition.
 pub fn mock_request() -> impl Fn(Request) -> Response {
     |request: Request| {
         let project_name = request.matches.get(0).unwrap();
         let path = request.matches.get(1).unwrap();
-        let method = request.method.clone();
+        let request_method = request.method.clone();
 
-        // Try to get config from cache first, 3us
+        // Retrieve the project configuration, or return an error response.
         let project_config = 
             match cache::get_or_else_load_cached_config(project_name) {
                 Ok(config) => config,
@@ -169,51 +183,20 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
             };
 
         if let Some(endpoint) = project_config.endpoints.get(path) {
-            
-            // Try exact match first
-            let key = create_endpoint_key(&method, &request.queries, &request.body);
-            
-            // Try to find exact match in condition_map
-            if let Some((response, delay)) = endpoint.condition_map.get(&key) {
-                if *delay > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(*delay));
-                }
-                let body = response.body
-                    .as_ref()
-                    .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
-                    .unwrap_or("null".to_string());
-
-                return Response {
-                    status: response.status,
-                    body,
-                    headers: response.headers.clone(),
-                };
+            // Try matching using the request's actual method.
+            if let Some(response) = try_match_conditions(&request, endpoint, &request_method) {
+                return response;
             }
-
-            // Fallback to sequential check if no exact match found
-            for condition in &endpoint.conditions {
-                if condition.method.to_uppercase() != method.clone().to_string().to_uppercase() {
-                    continue;
-                }
-                if check_condition(&request, condition, true) {
-                    if condition.delay > 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(condition.delay));
-                    }
-                    let body = condition.response.body
-                        .as_ref()
-                        .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
-                        .unwrap_or("null".to_string());
-
-                    return Response {
-                        status: condition.response.status,
-                        body,
-                        headers: condition.response.headers.clone(),
-                    };
+            // If the request is POST and no match was found,
+            // fall back to checking GET conditions to support shared configuration.
+            if request_method == Method::Post {
+                if let Some(response) = try_match_conditions(&request, endpoint, &Method::Get) {
+                    return response;
                 }
             }
         }
 
-        // No matching endpoint or condition found
+        // Return a "Not implemented" response if no matching endpoint or condition is found.
         Response {
             status: 406,
             body: "Not implemented.".to_string(),
@@ -222,29 +205,20 @@ pub fn mock_request() -> impl Fn(Request) -> Response {
     }
 }
 
-
 /// Check if the request matches the condition.
 fn check_condition(request: &Request, condition: &schema::WhenCondition, strict: bool) -> bool {
     //! DO NOT MODIFY THIS FUNCTION
-    match &condition.request {
-        Some(cond_req) => {
-            if !check_queries(&request.queries, &cond_req.queries) {
-                return false;
-            }
-            if !check_headers(&request.headers, &cond_req.headers) {
-                return false;
-            }
-            if !check_body(&request.body, &cond_req.body, strict) {
-                return false;
-            }
-            return true;
-        }
-        None => {
-            // check all of the request.queries, request.headers, request.body are empty
-            // removed && request.headers.is_empty()
-            return request.queries.is_empty() && request.body.is_empty();
-        }
+    let cond_req = &condition.request;
+    if !check_queries(&request.queries, &cond_req.queries) {
+        return false;
     }
+    if !check_headers(&request.headers, &cond_req.headers) {
+        return false;
+    }
+    if !check_body(&request.body, &cond_req.body, strict) {
+        return false;
+    }
+    return true;
 }
 
 
@@ -253,6 +227,9 @@ fn check_queries(request_queries: &HashMap<String, String>, queries_from_cond_re
     //! DO NOT MODIFY THIS FUNCTION
     match queries_from_cond_req {
         Some(cond_req_queries) => {
+            if request_queries.is_empty() {
+                return cond_req_queries.is_empty();
+            }
             for (expected_query_name, expected_query_param) in cond_req_queries {
                 if request_queries.is_empty() {
                     return false;
@@ -351,6 +328,49 @@ fn check_body(request_body: &String, body_from_cond_req: &Option<Value>, strict:
     }
 }
 
+
+// Helper function to try matching conditions for a given method.
+// This factors out repeated logic from the previous version of mock_request.
+fn try_match_conditions(request: &Request, endpoint: &schema::Endpoint, method: &Method) -> Option<Response> {
+    // Create an endpoint key based on method, query parameters, and body.
+    let key = create_endpoint_key(method, &request.queries, &request.body);
+    // Check for an exact match in the condition_map.
+    if let Some((response, delay)) = endpoint.condition_map.get(&key) {
+        if *delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(*delay));
+        }
+        let body = response.body
+            .as_ref()
+            .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
+            .unwrap_or("null".to_string());
+        return Some(Response {
+            status: response.status,
+            body,
+            headers: response.headers.clone(),
+        });
+    }
+    // Sequentially check each condition configuration.
+    for condition in &endpoint.conditions {
+        if condition.method.to_uppercase() != method.to_string().to_uppercase() {
+            continue;
+        }
+        if check_condition(request, condition, true) {
+            if condition.delay > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(condition.delay));
+            }
+            let body = condition.response.body
+                .as_ref()
+                .map(|v| if let Value::String(s) = v { s.clone() } else { v.to_string() })
+                .unwrap_or("null".to_string());
+            return Some(Response {
+                status: condition.response.status,
+                body,
+                headers: condition.response.headers.clone(),
+            });
+        }
+    }
+    None
+}
 
 #[cfg(test)]
 mod tests {
@@ -542,11 +562,11 @@ mod tests {
     fn test_check_condition_all_pass() {
         let condition = schema::WhenCondition {
             method: "GET".to_string(),
-            request: Some(schema::RequestConfig {
+            request: schema::RequestConfig {
                 queries: None,
                 headers: None,
                 body: None,
-            }),
+            },
             response: schema::ResponseConfig {
                 status: 200,
                 headers: HashMap::new(),

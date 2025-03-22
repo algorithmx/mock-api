@@ -18,8 +18,13 @@ pub fn get_project_config_file_path(project_name: &str) -> PathBuf {
   PathBuf::from(format!("{}/projects/{}.json", database_root_folder, project_name))
 }
 
+/// Returns the project name from a request.
+pub fn project_name_from_request(request: &Request) -> String {
+  request.params.get("name").unwrap().to_string()
+}
+
 /// Returns the path to a project's config file from a request.
 pub fn config_file_path_from_request(request: &Request) -> PathBuf {
-  let project_name = request.params.get("name").unwrap();
-  get_project_config_file_path(project_name)
+  let project_name = project_name_from_request(request);
+  get_project_config_file_path(&project_name)
 }

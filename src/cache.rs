@@ -22,10 +22,10 @@ pub fn cache_config(project_name: String, config: ProjectConfig) {
     cache.insert(project_name, Arc::new(config));
 }
 
-pub fn invalidate_cache(project_name: &str) {
-    let mut cache = PROJECT_CACHE.write().unwrap();
-    cache.remove(project_name);
-}
+// pub fn invalidate_cache(project_name: &str) {
+//     let mut cache = PROJECT_CACHE.write().unwrap();
+//     cache.remove(project_name);
+// }
 
 fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, String> {
     let config_path = helpers::get_project_config_file_path(project_name);
@@ -53,7 +53,20 @@ fn load_file_to_cache(project_name: &str) -> Result<Arc<ProjectConfig>, String> 
 
 pub fn get_or_else_load_cached_config(project_name: &str) -> Result<Arc<ProjectConfig>, String> {
     match get_cached_config(project_name) {
-        Some(config) => Ok(config),
+        Some(config) => {
+            // Create a mutable clone of the config
+            let mut config_clone = (*config).clone();
+            // Build condition maps for endpoints
+            for endpoint in config_clone.endpoints.values_mut() {
+                if endpoint.condition_map.is_empty() {
+                    endpoint.build_condition_map();
+                }
+            }
+            // Cache the updated config and return it
+            let updated_config = Arc::new(config_clone);
+            cache_config(project_name.to_string(), (*updated_config).clone());
+            Ok(updated_config)
+        },
         None => {
             match load_file_to_cache(project_name) {
                 Ok(config) => Ok(config),
